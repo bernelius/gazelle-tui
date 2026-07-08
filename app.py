@@ -2,7 +2,7 @@
 
 from textual.app import App, ComposeResult
 from textual.theme import Theme
-from textual.widgets import Footer, Header, Static, Input, Button, DataTable, Select
+from textual.widgets import Footer, Static, Input, Button, DataTable, Select
 from textual.containers import Container, Horizontal, ScrollableContainer
 from textual.screen import ModalScreen
 from textual.binding import Binding
@@ -890,7 +890,6 @@ class Gazelle(App):
     ]
 
     def compose(self) -> ComposeResult:
-        yield Header()
         yield ScrollableContainer(
             Container(
                 Static("Device", classes="section-title"),
