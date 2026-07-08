@@ -6,6 +6,7 @@ from textual.widgets import Header, Footer, Static, Input, Button, DataTable, Se
 from textual.containers import Container, Horizontal, ScrollableContainer
 from textual.screen import ModalScreen
 from textual.binding import Binding
+from textual.reactive import reactive
 from network import *
 import subprocess
 import asyncio
@@ -640,6 +641,7 @@ def build_css(styles: dict) -> str:
     #dialog {{ width: {styles["dialog_width"]}; height: auto; border: {styles["dialog_border"]} $accent; background: $background; padding: {styles["dialog_padding"]}; }}
     #title {{ text-style: {styles["title_text_style"]}; color: $accent; margin-bottom: 1; }}
     .section {{ border: {styles["section_border"]} $accent; margin: {styles["section_margin"]}; padding: {styles["section_padding"]}; }}
+    .section.active-section {{ border: {styles["section_border"]} $primary; }}
     .section-title {{ text-style: {styles["section_title_text_style"]}; color: $accent; background: $background; padding: {styles["section_title_padding"]}; }}
     #device-section, #station-section {{ height: {styles["info_section_height"]}; }}
     Static {{ height: auto; }}
@@ -756,11 +758,15 @@ class Gazelle(App):
     _omarchy_styles = load_omarchy_styles()
     _user_styles = load_user_styles(CONFIG_DIR, _omarchy_styles)
     CSS = build_css(_user_styles)
+
+    # Currently selected network section ("known" or "new") for visual highlighting.
+    active_section = reactive(None)
+
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("j", "cursor_down", show=False),
         Binding("k", "cursor_up", show=False),
-        Binding("tab", "switch_section", "Switch"),
+        Binding("tab", "switch_section", "Switch", priority=True),
         Binding("space", "select", "Connect"),
         Binding("s", "scan", "Scan"),
         Binding("d", "disconnect", "Disconnect"),
@@ -793,11 +799,13 @@ class Gazelle(App):
                 Static("Known Networks", classes="section-title"),
                 DataTable(id="known", cursor_type="row"),
                 classes="section",
+                id="known-section",
             ),
             Container(
                 Static("New Networks", classes="section-title"),
                 DataTable(id="new", cursor_type="row"),
                 classes="section",
+                id="new-section",
             ),
         )
         yield Footer()
@@ -860,8 +868,10 @@ class Gazelle(App):
 
         self.query_one("#dev").add_columns("Name", "Mode", "Powered", "Address")
         self.query_one("#dev").cursor_type = "none"
+        self.query_one("#dev").can_focus = False
         self.query_one("#sta").add_columns("State", "Scanning", "Frequency", "Security")
         self.query_one("#sta").cursor_type = "none"
+        self.query_one("#sta").can_focus = False
         self.query_one("#known").add_columns("Name", "Security", "Signal")
         self.query_one("#new").add_columns("Name", "Security", "Signal")
 
@@ -873,6 +883,7 @@ class Gazelle(App):
         self.run_worker(self.scan_networks_async, exclusive=True)
 
         self.query_one("#new").focus()
+        self.active_section = "new"
 
     def load_config(self) -> dict:
         """Load configuration from ~/.config/gazelle/config.json
@@ -1033,13 +1044,40 @@ class Gazelle(App):
         if t.row_count > 0:
             t.action_cursor_up()
 
+    def watch_active_section(self, old_section: str | None, new_section: str | None) -> None:
+        """Update the visual highlight when the active network section changes."""
+        if new_section is None:
+            return
+        known_section = self.query_one("#known-section")
+        new_container = self.query_one("#new-section")
+        if new_section == "known":
+            known_section.add_class("active-section")
+            new_container.remove_class("active-section")
+        else:
+            new_container.add_class("active-section")
+            known_section.remove_class("active-section")
+
+    def on_focus(self, event) -> None:
+        """Keep active_section in sync with keyboard or mouse focus changes."""
+        if event.control.id in ("known", "new"):
+            self.active_section = event.control.id
+
     def action_switch_section(self) -> None:
+        """Toggle focus between Known and New network sections.
+
+        Falls back to the default focus traversal when a modal/dialog is open.
+        """
         known = self.query_one("#known")
         new = self.query_one("#new")
+        if not (known.has_focus or new.has_focus):
+            super().action_focus_next()
+            return
         if known.has_focus:
             new.focus()
+            self.active_section = "new"
         else:
             known.focus()
+            self.active_section = "known"
 
     def action_scan(self) -> None:
         self.notify("Scanning...")
