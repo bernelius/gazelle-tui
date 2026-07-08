@@ -381,9 +381,21 @@ Gazelle supports all built-in Textual themes with automatic persistence.
 
 ## Custom Themes
 
-Create your own color schemes by editing `~/.config/gazelle/theme.toml`. The file is automatically generated with commented examples on first run.
+Create your own color scheme by editing `~/.config/gazelle/theme.toml`. The file is automatically generated with commented examples on first run.
 
-**Omarchy Users:** As long as you leave the `theme.toml` file commented out (default), your automatic theme syncing will continue working. Defining colors in this file will override the Omarchy theme.
+All four semantic colors must be defined under `[colors]` for the custom theme to activate:
+
+```toml
+[colors]
+accent     = "#EBCB8B"
+primary    = "#BF616A"
+foreground = "#D8DEE9"
+background = "#2E3440"
+```
+
+If the `[colors]` section is empty or commented out, Gazelle falls back to Omarchy auto-detection (if available) or the built-in `textual-dark` theme.
+
+**Migration:** Older `theme.toml` files that used `[colors.normal]`, `[colors.bright]`, and `[colors.primary]` are automatically migrated to the format above on first run. A backup is saved as `~/.config/gazelle/theme.toml.bak`.
 
 Your custom theme appears as "user-theme" in the theme picker (`Ctrl+P`).
 

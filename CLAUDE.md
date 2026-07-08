@@ -47,19 +47,33 @@ The application is three files plus tests:
 ### Theme System
 
 `config.json["theme"]` is the source of truth once set. On first run, the app auto-detects a default in this order:
-1. **User custom theme** - `~/.config/gazelle/theme.toml`
+1. **User custom theme** - `~/.config/gazelle/theme.toml` (only if all four `[colors]` keys are defined)
 2. **Omarchy auto-detection** - reads `~/.config/omarchy/current/theme/alacritty.toml`
 3. **Built-in Textual themes** - `textual-dark` is the default
 
+The user `theme.toml` uses semantic color names under `[colors]`:
+
+```toml
+[colors]
+accent     = "#EBCB8B"
+primary    = "#BF616A"
+foreground = "#D8DEE9"
+background = "#2E3440"
+```
+
+An empty or fully commented `[colors]` section means the custom theme does not activate, so Omarchy or the built-in default is used.
+
 Textual's built-in `"ansi-dark"` and `"ansi-light"` themes are available and can be selected manually via the command palette (`Ctrl+P`) or by setting `"theme": "ansi-dark"` / `"theme": "ansi-light"` in `config.json`.
 
-Theme choice persists in `~/.config/gazelle/config.json`. Helper functions `resolve_theme()`, `load_omarchy_colors()`, `load_user_colors()`, and `normalize_color_format()` handle theme resolution, color loading, and format conversion (0xRRGGBB to #RRGGBB).
+Theme choice persists in `~/.config/gazelle/config.json`. Helper functions `resolve_theme()`, `load_omarchy_colors()`, `load_user_colors()`, `migrate_user_theme()`, `load_user_styles()`, and `normalize_color_format()` handle theme resolution, color/style loading, migration, and format conversion (0xRRGGBB to #RRGGBB).
+
+Old `theme.toml` files using the nested `[colors.normal]` / `[colors.bright]` / `[colors.primary]` format are automatically migrated to the flat semantic `[colors]` format on startup, with a backup written to `theme.toml.bak`.
 
 ### Configuration
 
 - Config dir: `~/.config/gazelle/` (uses `platformdirs` constant `CONFIG_DIR`)
 - Config file: `config.json` (currently only stores theme preference)
-- Theme file: `theme.toml` (user custom colors, auto-generated template on first run)
+- Theme file: `theme.toml` (user custom colors, auto-generated template on first run; `[styles]` section is optional)
 
 ## Packaging
 

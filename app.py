@@ -516,10 +516,127 @@ def load_omarchy_styles():
     }
 
 
+_DEFAULT_THEME_COLORS = {
+    "accent": "#EBCB8B",
+    "primary": "#BF616A",
+    "foreground": "#D8DEE9",
+    "background": "#2E3440",
+}
+
+_SEMANTIC_COLOR_KEYS = set(_DEFAULT_THEME_COLORS)
+
+
+def _is_old_theme_format(data: dict) -> bool:
+    """Return True if theme.toml uses the pre-semantic nested color format."""
+    colors = data.get("colors")
+    if not isinstance(colors, dict):
+        return False
+
+    # Already migrated if any new semantic key is present as a concrete value.
+    if any(key in colors and not isinstance(colors[key], dict) for key in _SEMANTIC_COLOR_KEYS):
+        return False
+
+    # Old format used nested dicts under colors.
+    return any(isinstance(colors.get(section), dict) for section in ("normal", "bright", "primary"))
+
+
+def _write_theme_file(
+    theme_file: Path, colors: dict, styles: dict, commented: bool = False
+) -> None:
+    """Write a theme.toml file from the semantic color and style dicts."""
+    comment_prefix = "#" if commented else ""
+    lines = [
+        "# Gazelle Theme Configuration",
+        "# Uncomment and modify these values to customize your theme",
+        "# Colors should be in hex format (#RRGGBB) or 0xRRGGBB",
+        "[colors]",
+    ]
+    for key in ("accent", "primary", "foreground", "background"):
+        lines.append(f"{comment_prefix}{key} = {json.dumps(colors[key])}")
+
+    if styles:
+        lines.extend(
+            [
+                "",
+                "# TUI Style Overrides",
+                "# Uncomment and modify these values to customize borders, spacing, etc.",
+                "# Border styles: ascii, blank, dashed, double, heavy, hidden, hkey, inner,",
+                "#   none, outer, panel, round, solid, tall, thick, vkey, wide",
+                '# Spacing values use Textual CSS units (e.g. "1 2" = 1 vertical, 2 horizontal)',
+                "[styles]",
+            ]
+        )
+        for key, value in styles.items():
+            lines.append(f"{key} = {json.dumps(value)}")
+
+    theme_file.write_text("\n".join(lines) + "\n")
+
+
+def migrate_user_theme(config_dir: Path) -> bool:
+    """
+    One-time migration from the old nested color format to the semantic format.
+
+    Backs up the original file to theme.toml.bak. Returns True if a migration
+    was performed. An empty old template (no color values set) is rewritten to
+    the new empty template so it remains inactive.
+    """
+    if tomllib is None:
+        return False
+
+    theme_file = config_dir / "theme.toml"
+    if not theme_file.exists():
+        return False
+
+    try:
+        with open(theme_file, "rb") as f:
+            data = tomllib.load(f)
+
+        if not _is_old_theme_format(data):
+            return False
+
+        colors = data.get("colors", {})
+        normal = colors.get("normal", {})
+        bright = colors.get("bright", {})
+        primary = colors.get("primary", {})
+
+        migrated = {
+            "accent": normal.get("yellow") or bright.get("yellow"),
+            "primary": normal.get("red") or bright.get("red"),
+            "foreground": primary.get("foreground"),
+            "background": primary.get("background"),
+        }
+
+        # If no old colors were actually set, rewrite to the new empty template
+        # so an all-commented file still does not activate a custom theme.
+        if not any(migrated.values()):
+            _write_theme_file(theme_file, _DEFAULT_THEME_COLORS, {}, commented=True)
+            return True
+
+        # Fill any missing colors from defaults so the migrated theme is complete.
+        for key, default in _DEFAULT_THEME_COLORS.items():
+            if not migrated[key]:
+                migrated[key] = default
+            else:
+                migrated[key] = normalize_color_format(migrated[key])
+
+        styles = data.get("styles", {})
+        if not isinstance(styles, dict):
+            styles = {}
+
+        backup_file = theme_file.with_name("theme.toml.bak")
+        backup_file.write_text(theme_file.read_text())
+
+        _write_theme_file(theme_file, migrated, styles)
+        return True
+    except Exception:
+        # If migration fails, leave the file untouched and let loading fall back.
+        return False
+
+
 def load_user_colors(config_dir: Path):
     """
     Load colors from user defined theme file.
-    Returns dict with RGB color values, or None if not found.
+    Returns dict with RGB color values, or None if not found/invalid.
     Create file if it doesnt exist, dont load after creation.
     """
     if tomllib is None or try_create_user_theme_template(config_dir):
@@ -529,22 +646,29 @@ def load_user_colors(config_dir: Path):
     if not theme_file.exists():
         return None
 
+    # Migrate old-format theme files before loading.
+    migrate_user_theme(config_dir)
+
     try:
         with open(theme_file, "rb") as f:
             data = tomllib.load(f)
 
         colors = data.get("colors", {})
-        normal = colors.get("normal", {})
-        bright = colors.get("bright", {})
-        primary = colors.get("primary", {})
+
+        accent = colors.get("accent")
+        primary = colors.get("primary")
+        foreground = colors.get("foreground")
+        background = colors.get("background")
+
+        # All four semantic colors must be defined for a custom theme to activate.
+        if not all((accent, primary, foreground, background)):
+            return None
 
         return {
-            "accent": normalize_color_format(
-                normal.get("yellow") or bright.get("yellow") or "#EBCB8B"
-            ),
-            "primary": normalize_color_format(normal.get("red") or bright.get("red") or "#BF616A"),
-            "foreground": normalize_color_format(primary.get("foreground") or "#D8DEE9"),
-            "background": normalize_color_format(primary.get("background") or "#2E3440"),
+            "accent": normalize_color_format(accent),
+            "primary": normalize_color_format(primary),
+            "foreground": normalize_color_format(foreground),
+            "background": normalize_color_format(background),
         }
     except Exception:
         # If parsing fails, return None to use fallback
@@ -700,27 +824,11 @@ def try_create_user_theme_template(config_dir: Path):
         template_content = """# Gazelle Theme Configuration
 # Uncomment and modify these values to customize your theme
 # Colors should be in hex format (#RRGGBB) or 0xRRGGBB
-[colors.primary]
+[colors]
+#accent     = "#EBCB8B"
+#primary    = "#BF616A"
 #foreground = "#D8DEE9"
 #background = "#2E3440"
-[colors.normal]
-#black = "#3B4252"
-#red = "#BF616A"
-#green = "#A3BE8C"
-#yellow = "#EBCB8B"
-#blue = "#5E81AC"
-#magenta = "#B48EAD"
-#cyan = "#88C0D0"
-#white = "#E5E9F0"
-[colors.bright]
-#black = "#4C566A"
-#red = "#D08770"
-#green = "#8FBCBB"
-#yellow = "#EBCB8B"
-#blue = "#81A1C1"
-#magenta = "#B48EAD"
-#cyan = "#8FBCBB"
-#white = "#ECEFF4"
 
 # TUI Style Overrides
 # Uncomment and modify these values to customize borders, spacing, etc.

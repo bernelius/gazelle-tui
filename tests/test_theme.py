@@ -9,6 +9,7 @@ import pytest
 from app import (
     load_omarchy_colors,
     load_user_colors,
+    migrate_user_theme,
     resolve_theme,
     try_create_user_theme_template,
 )
@@ -71,22 +72,61 @@ class TestLoadUserColors:
         assert result is None
         assert (config_dir / "theme.toml").exists()
 
-    def test_returns_fallback_colors_for_empty_template(self, tmp_path, monkeypatch):
+    def test_returns_none_for_empty_template(self, tmp_path, monkeypatch):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         config_dir = tmp_path / ".config" / "gazelle"
         # First call creates the template
         assert load_user_colors(config_dir) is None
 
-        # Second call should parse the empty template and return fallbacks
+        # An empty/commented template does not activate the custom theme
+        result = load_user_colors(config_dir)
+
+        assert result is None
+
+    def test_returns_custom_colors_when_present(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        config_dir = tmp_path / ".config" / "gazelle"
+        config_dir.mkdir(parents=True)
+        theme_file = config_dir / "theme.toml"
+        theme_file.write_text(
+            """
+[colors]
+accent = "#FFFF00"
+primary = "#FF0000"
+foreground = "#FFFFFF"
+background = "#000000"
+"""
+        )
+
         result = load_user_colors(config_dir)
 
         assert result is not None
-        assert result["primary"] == "#BF616A"
-        assert result["accent"] == "#EBCB8B"
-        assert result["foreground"] == "#D8DEE9"
-        assert result["background"] == "#2E3440"
+        assert result["accent"] == "#FFFF00"
+        assert result["primary"] == "#FF0000"
+        assert result["foreground"] == "#FFFFFF"
+        assert result["background"] == "#000000"
 
-    def test_returns_custom_colors_when_present(self, tmp_path, monkeypatch):
+    def test_returns_none_when_color_missing(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        config_dir = tmp_path / ".config" / "gazelle"
+        config_dir.mkdir(parents=True)
+        theme_file = config_dir / "theme.toml"
+        theme_file.write_text(
+            """
+[colors]
+accent = "#FFFF00"
+primary = "#FF0000"
+foreground = "#FFFFFF"
+"""
+        )
+
+        assert load_user_colors(config_dir) is None
+
+
+class TestMigrateUserTheme:
+    """Tests for migrating old-format theme.toml files."""
+
+    def test_migrates_old_full_format(self, tmp_path, monkeypatch):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         config_dir = tmp_path / ".config" / "gazelle"
         config_dir.mkdir(parents=True)
@@ -100,16 +140,120 @@ background = "#000000"
 [colors.normal]
 yellow = "#FFFF00"
 red = "#FF0000"
+
+[colors.bright]
+yellow = "#EEEE00"
+red = "#EE0000"
 """
         )
 
-        result = load_user_colors(config_dir)
+        assert migrate_user_theme(config_dir) is True
 
+        # Normal colors take precedence over bright colors.
+        result = load_user_colors(config_dir)
         assert result is not None
-        assert result["foreground"] == "#FFFFFF"
-        assert result["background"] == "#000000"
         assert result["accent"] == "#FFFF00"
         assert result["primary"] == "#FF0000"
+        assert result["foreground"] == "#FFFFFF"
+        assert result["background"] == "#000000"
+
+        assert (config_dir / "theme.toml.bak").exists()
+        assert "[colors.normal]" not in theme_file.read_text()
+
+    def test_migrates_partial_old_format_with_defaults(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        config_dir = tmp_path / ".config" / "gazelle"
+        config_dir.mkdir(parents=True)
+        theme_file = config_dir / "theme.toml"
+        theme_file.write_text(
+            """
+[colors.normal]
+yellow = "#FFFF00"
+
+[colors.primary]
+foreground = "#FFFFFF"
+"""
+        )
+
+        assert migrate_user_theme(config_dir) is True
+
+        result = load_user_colors(config_dir)
+        assert result is not None
+        assert result["accent"] == "#FFFF00"
+        assert result["primary"] == "#BF616A"
+        assert result["foreground"] == "#FFFFFF"
+        assert result["background"] == "#2E3440"
+
+    def test_migration_preserves_styles(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        config_dir = tmp_path / ".config" / "gazelle"
+        config_dir.mkdir(parents=True)
+        theme_file = config_dir / "theme.toml"
+        theme_file.write_text(
+            """
+[colors.primary]
+foreground = "#FFFFFF"
+background = "#000000"
+
+[colors.normal]
+yellow = "#FFFF00"
+red = "#FF0000"
+
+[styles]
+dialog_border = "round"
+section_border = "round"
+"""
+        )
+
+        assert migrate_user_theme(config_dir) is True
+
+        result = load_user_colors(config_dir)
+        assert result is not None
+
+        migrated_text = theme_file.read_text()
+        assert 'dialog_border = "round"' in migrated_text
+        assert 'section_border = "round"' in migrated_text
+
+    def test_empty_old_template_rewritten_without_activating(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        config_dir = tmp_path / ".config" / "gazelle"
+        config_dir.mkdir(parents=True)
+        theme_file = config_dir / "theme.toml"
+        theme_file.write_text(
+            """
+[colors.primary]
+#foreground = "#D8DEE9"
+#background = "#2E3440"
+
+[colors.normal]
+#yellow = "#EBCB8B"
+#red = "#BF616A"
+"""
+        )
+
+        assert migrate_user_theme(config_dir) is True
+        assert load_user_colors(config_dir) is None
+
+        migrated_text = theme_file.read_text()
+        assert "[colors.normal]" not in migrated_text
+        assert "#accent =" in migrated_text
+
+    def test_new_format_not_migrated(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        config_dir = tmp_path / ".config" / "gazelle"
+        config_dir.mkdir(parents=True)
+        theme_file = config_dir / "theme.toml"
+        original_text = """
+[colors]
+accent = "#FFFF00"
+primary = "#FF0000"
+foreground = "#FFFFFF"
+background = "#000000"
+"""
+        theme_file.write_text(original_text)
+
+        assert migrate_user_theme(config_dir) is False
+        assert theme_file.read_text() == original_text
 
 
 class TestLoadOmarchyColors:
@@ -214,13 +358,11 @@ class TestOnMountThemeSelection:
         theme_dir.mkdir(parents=True)
         (theme_dir / "theme.toml").write_text(
             """
-[colors.primary]
+[colors]
+accent = "#FFFF00"
+primary = "#FF0000"
 foreground = "#FFFFFF"
 background = "#000000"
-
-[colors.normal]
-yellow = "#FFFF00"
-red = "#FF0000"
 """
         )
 
