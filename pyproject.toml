@@ -1,0 +1,23 @@
+[project]
+name = "gazelle-tui"
+version = "0.1.0"
+description = "Network Manager TUI"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = ["textual>=8.2.8"]
+
+[dependency-groups]
+dev = ["pytest>=9.1.1", "ruff>=0.15.20", "pre-commit>=4.2.0"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+ignore = ["E722"]
+
+[tool.ruff.lint.per-file-ignores]
+"app.py" = ["F403", "F405"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

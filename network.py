@@ -1,102 +1,130 @@
 """NetworkManager interface"""
+
 import subprocess
-import sys
 
 try:
     import dbus
+
     HAS_DBUS = True
 except ImportError:
     HAS_DBUS = False
 
+
 def get_wifi_interface():
     """Auto-detect WiFi interface"""
     try:
-        result = subprocess.run(['nmcli', '-t', '-f', 'DEVICE,TYPE', 'device'],
-                               capture_output=True, text=True, check=True)
-        for line in result.stdout.strip().split('\n'):
-            if ':wifi' in line:
-                return line.split(':')[0]
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "DEVICE,TYPE", "device"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        for line in result.stdout.strip().split("\n"):
+            if ":wifi" in line:
+                return line.split(":")[0]
     except:
         pass
-    return 'wlan0'
+    return "wlan0"
+
 
 def get_wifi_list():
     """Get available WiFi networks"""
     try:
         result = subprocess.run(
-            ['nmcli', '-t', '-f', 'SSID,SIGNAL,SECURITY,IN-USE', 'device', 'wifi', 'list'],
-            capture_output=True, text=True, check=True)
-        
+            ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "device", "wifi", "list"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
         networks, seen = [], set()
-        for line in result.stdout.strip().split('\n'):
+        for line in result.stdout.strip().split("\n"):
             if not line:
                 continue
-            parts = line.split(':')
+            parts = line.split(":")
             if len(parts) >= 4 and parts[0] and parts[0] not in seen:
                 seen.add(parts[0])
-                networks.append({
-                    'ssid': parts[0],
-                    'signal': int(parts[1]) if parts[1] else 0,
-                    'security': parts[2],
-                    'connected': parts[3] == '*'
-                })
-        return sorted(networks, key=lambda x: x['signal'], reverse=True)
+                networks.append(
+                    {
+                        "ssid": parts[0],
+                        "signal": int(parts[1]) if parts[1] else 0,
+                        "security": parts[2],
+                        "connected": parts[3] == "*",
+                    }
+                )
+        return sorted(networks, key=lambda x: x["signal"], reverse=True)
     except:
         return []
+
 
 def get_current_connection():
     """Get active connection name"""
     try:
-        result = subprocess.run(['nmcli', '-t', '-f', 'NAME', 'connection', 'show', '--active'],
-                               capture_output=True, text=True, check=True)
-        return result.stdout.strip().split('\n')[0] or None
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME", "connection", "show", "--active"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip().split("\n")[0] or None
     except:
         return None
+
 
 def get_station_info():
     """Get station status"""
     try:
         current = get_current_connection()
-        info = {'state': 'connected' if current else 'disconnected', 
-                'scanning': 'false', 'frequency': '-', 'security': '-'}
-        
+        info = {
+            "state": "connected" if current else "disconnected",
+            "scanning": "false",
+            "frequency": "-",
+            "security": "-",
+        }
+
         if current:
-            result = subprocess.run(['nmcli', '-t', '-f', 'ACTIVE,SSID,FREQ,SECURITY', 
-                                    'device', 'wifi', 'list'], capture_output=True, text=True)
-            for line in result.stdout.strip().split('\n'):
-                if line.startswith('yes:') or line.startswith('*:'):
-                    parts = line.split(':')
+            result = subprocess.run(
+                ["nmcli", "-t", "-f", "ACTIVE,SSID,FREQ,SECURITY", "device", "wifi", "list"],
+                capture_output=True,
+                text=True,
+            )
+            for line in result.stdout.strip().split("\n"):
+                if line.startswith("yes:") or line.startswith("*:"):
+                    parts = line.split(":")
                     if len(parts) >= 4:
-                        info['frequency'] = parts[2] or '-'
-                        info['security'] = parts[3] or '-'
+                        info["frequency"] = parts[2] or "-"
+                        info["security"] = parts[3] or "-"
                     break
         return info
     except:
-        return {'state': 'disconnected', 'scanning': 'false', 'frequency': '-', 'security': '-'}
+        return {"state": "disconnected", "scanning": "false", "frequency": "-", "security": "-"}
+
 
 def connect_wifi(ssid, password, hidden=False):
     """Connect to WiFi (supports hidden SSIDs)"""
     try:
-        cmd = ['nmcli', 'device', 'wifi', 'connect', ssid]
+        cmd = ["nmcli", "device", "wifi", "connect", ssid]
         if password:
-            cmd.extend(['password', password])
+            cmd.extend(["password", password])
         if hidden:
-            cmd.append('hidden')
-            cmd.append('yes')
+            cmd.append("hidden")
+            cmd.append("yes")
         result = subprocess.run(cmd, capture_output=True, text=True)
-        
+
         # If connection failed, delete the connection profile that was created
         if result.returncode != 0:
-            subprocess.run(['nmcli', 'connection', 'delete', ssid], 
-                          capture_output=True, text=True)
-        
+            subprocess.run(["nmcli", "connection", "delete", ssid], capture_output=True, text=True)
+
         return result.returncode == 0, result.stderr or result.stdout
     except Exception as e:
         return False, str(e)
 
-def connect_802_1x(ssid, username, password, eap_method="peap", phase2_auth="mschapv2", hidden=False):
+
+def connect_802_1x(
+    ssid, username, password, eap_method="peap", phase2_auth="mschapv2", hidden=False
+):
     """Connect to 802.1X enterprise WiFi (supports hidden SSIDs)
-    
+
     Supports:
     - EAP: peap, ttls, tls
     - Phase2: mschapv2, mschap, pap, chap, gtc, md5
@@ -104,62 +132,79 @@ def connect_802_1x(ssid, username, password, eap_method="peap", phase2_auth="msc
     """
     try:
         iface = get_wifi_interface()
-        subprocess.run(['nmcli', 'connection', 'delete', ssid], capture_output=True)
-        
+        subprocess.run(["nmcli", "connection", "delete", ssid], capture_output=True)
+
         # Build command based on EAP method
         cmd = [
-            'nmcli', 'connection', 'add', 'type', 'wifi', 'con-name', ssid,
-            'ifname', iface, 'ssid', ssid, 'wifi-sec.key-mgmt', 'wpa-eap',
-            '802-1x.eap', eap_method.lower(), '802-1x.identity', username
+            "nmcli",
+            "connection",
+            "add",
+            "type",
+            "wifi",
+            "con-name",
+            ssid,
+            "ifname",
+            iface,
+            "ssid",
+            ssid,
+            "wifi-sec.key-mgmt",
+            "wpa-eap",
+            "802-1x.eap",
+            eap_method.lower(),
+            "802-1x.identity",
+            username,
         ]
-        
+
         # Add hidden SSID support
         if hidden:
-            cmd.extend(['wifi.hidden', 'yes'])
-        
+            cmd.extend(["wifi.hidden", "yes"])
+
         # Add auth-specific parameters
-        if eap_method.lower() in ['peap', 'ttls']:
+        if eap_method.lower() in ["peap", "ttls"]:
             # PEAP and TTLS use phase2 auth + password
-            cmd.extend(['802-1x.phase2-auth', phase2_auth.lower()])
-            cmd.extend(['802-1x.password', password])
-        elif eap_method.lower() == 'tls':
+            cmd.extend(["802-1x.phase2-auth", phase2_auth.lower()])
+            cmd.extend(["802-1x.password", password])
+        elif eap_method.lower() == "tls":
             # TLS uses certificates (for now, treat password as private key password)
-            cmd.extend(['802-1x.private-key-password', password])
-        
+            cmd.extend(["802-1x.private-key-password", password])
+
         result = subprocess.run(cmd, capture_output=True, text=True)
-        
+
         if result.returncode != 0:
             return False, result.stderr
-        
-        result = subprocess.run(['nmcli', 'connection', 'up', ssid],
-                               capture_output=True, text=True)
-        
+
+        result = subprocess.run(["nmcli", "connection", "up", ssid], capture_output=True, text=True)
+
         # If connection failed, delete the connection profile that was created
         if result.returncode != 0:
-            subprocess.run(['nmcli', 'connection', 'delete', ssid], 
-                          capture_output=True, text=True)
-        
+            subprocess.run(["nmcli", "connection", "delete", ssid], capture_output=True, text=True)
+
         return result.returncode == 0, result.stderr or "Connected"
     except Exception as e:
         return False, str(e)
 
+
 def forget_network(ssid):
     """Delete saved WiFi network by SSID"""
     try:
-        result = subprocess.run(['nmcli', 'connection', 'delete', ssid],
-                               capture_output=True, text=True)
+        result = subprocess.run(
+            ["nmcli", "connection", "delete", ssid], capture_output=True, text=True
+        )
         return result.returncode == 0
     except:
         return False
 
+
 def disconnect():
     """Disconnect from network"""
     try:
-        result = subprocess.run(['nmcli', 'device', 'disconnect', get_wifi_interface()],
-                               capture_output=True, text=True)
+        result = subprocess.run(
+            ["nmcli", "device", "disconnect", get_wifi_interface()], capture_output=True, text=True
+        )
         return result.returncode == 0
     except:
         return False
+
 
 def wifi_enabled():
     """Check if WiFi is enabled"""
@@ -173,12 +218,13 @@ def wifi_enabled():
             return sw and hw
         except Exception:
             pass
-            
+
     try:
-        result = subprocess.run(['nmcli', 'radio', 'wifi'], capture_output=True, text=True)
-        return result.stdout.strip() == 'enabled'
+        result = subprocess.run(["nmcli", "radio", "wifi"], capture_output=True, text=True)
+        return result.stdout.strip() == "enabled"
     except:
         return True
+
 
 def toggle_wifi():
     """Toggle WiFi on/off"""
@@ -196,10 +242,11 @@ def toggle_wifi():
 
     try:
         enabled = wifi_enabled()
-        subprocess.run(['nmcli', 'radio', 'wifi', 'off' if enabled else 'on'])
+        subprocess.run(["nmcli", "radio", "wifi", "off" if enabled else "on"])
         return not enabled
     except:
         return wifi_enabled()
+
 
 def wwan_enabled():
     """Check if WWAN is enabled"""
@@ -213,12 +260,13 @@ def wwan_enabled():
             return sw and hw
         except Exception:
             pass
-            
+
     try:
-        result = subprocess.run(['nmcli', 'radio', 'wwan'], capture_output=True, text=True)
-        return result.stdout.strip() == 'enabled'
+        result = subprocess.run(["nmcli", "radio", "wwan"], capture_output=True, text=True)
+        return result.stdout.strip() == "enabled"
     except:
         return True
+
 
 def toggle_wwan():
     """Toggle WWAN on/off"""
@@ -236,22 +284,28 @@ def toggle_wwan():
 
     try:
         enabled = wwan_enabled()
-        subprocess.run(['nmcli', 'radio', 'wwan', 'off' if enabled else 'on'])
+        subprocess.run(["nmcli", "radio", "wwan", "off" if enabled else "on"])
         return not enabled
     except:
         return wwan_enabled()
 
+
 def get_ethernet_interface():
     """Auto-detect Ethernet interface"""
     try:
-        result = subprocess.run(['nmcli', '-t', '-f', 'DEVICE,TYPE', 'device'],
-                               capture_output=True, text=True, check=True)
-        for line in result.stdout.strip().split('\n'):
-            if ':ethernet' in line:
-                return line.split(':')[0]
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "DEVICE,TYPE", "device"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        for line in result.stdout.strip().split("\n"):
+            if ":ethernet" in line:
+                return line.split(":")[0]
     except:
         pass
     return None
+
 
 def connect_802_1x_wired(con_name, username, password, eap_method="peap", phase2_auth="mschapv2"):
     """Connect to 802.1X enterprise wired network
@@ -265,37 +319,51 @@ def connect_802_1x_wired(con_name, username, password, eap_method="peap", phase2
         if not iface:
             return False, "No Ethernet interface found"
 
-        subprocess.run(['nmcli', 'connection', 'delete', con_name], capture_output=True)
+        subprocess.run(["nmcli", "connection", "delete", con_name], capture_output=True)
 
         # Build command for wired 802.1X
         cmd = [
-            'nmcli', 'connection', 'add', 'type', '802-3-ethernet', 'con-name', con_name,
-            'ifname', iface, '802-1x.eap', eap_method.lower(), '802-1x.identity', username
+            "nmcli",
+            "connection",
+            "add",
+            "type",
+            "802-3-ethernet",
+            "con-name",
+            con_name,
+            "ifname",
+            iface,
+            "802-1x.eap",
+            eap_method.lower(),
+            "802-1x.identity",
+            username,
         ]
 
         # Add auth-specific parameters
-        if eap_method.lower() in ['peap', 'ttls']:
-            cmd.extend(['802-1x.phase2-auth', phase2_auth.lower()])
-            cmd.extend(['802-1x.password', password])
-        elif eap_method.lower() == 'tls':
-            cmd.extend(['802-1x.private-key-password', password])
+        if eap_method.lower() in ["peap", "ttls"]:
+            cmd.extend(["802-1x.phase2-auth", phase2_auth.lower()])
+            cmd.extend(["802-1x.password", password])
+        elif eap_method.lower() == "tls":
+            cmd.extend(["802-1x.private-key-password", password])
 
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.returncode != 0:
             return False, result.stderr
 
-        result = subprocess.run(['nmcli', 'connection', 'up', con_name],
-                               capture_output=True, text=True)
+        result = subprocess.run(
+            ["nmcli", "connection", "up", con_name], capture_output=True, text=True
+        )
 
         # If connection failed, delete the connection profile that was created
         if result.returncode != 0:
-            subprocess.run(['nmcli', 'connection', 'delete', con_name],
-                          capture_output=True, text=True)
+            subprocess.run(
+                ["nmcli", "connection", "delete", con_name], capture_output=True, text=True
+            )
 
         return result.returncode == 0, result.stderr or "Connected"
     except Exception as e:
         return False, str(e)
+
 
 def disconnect_ethernet():
     """Disconnect from wired network"""
@@ -303,180 +371,204 @@ def disconnect_ethernet():
         iface = get_ethernet_interface()
         if not iface:
             return False
-        result = subprocess.run(['nmcli', 'device', 'disconnect', iface],
-                               capture_output=True, text=True)
+        result = subprocess.run(
+            ["nmcli", "device", "disconnect", iface], capture_output=True, text=True
+        )
         return result.returncode == 0
     except:
         return False
 
+
 def is_enterprise(security):
     """Check if network is 802.1X"""
-    return 'WPA-EAP' in security or '802.1X' in security
+    return "WPA-EAP" in security or "802.1X" in security
+
 
 def is_owe(security):
     """Check if network uses OWE (Enhanced Open / WPA3-OWE)"""
-    return 'OWE' in security or 'WPA3-OWE' in security
+    return "OWE" in security or "WPA3-OWE" in security
+
 
 def get_vpn_list():
     """Get all VPN connections configured in NetworkManager"""
     try:
-        result = subprocess.run(['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show'],
-                               capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
         active_vpn = get_active_vpn()
         vpns = []
-        
+
         # VPN types supported by NetworkManager
-        vpn_types = [':vpn', ':wireguard', ':vpnc', ':pptp', ':openconnect', ':openvpn']
-        
-        for line in result.stdout.strip().split('\n'):
+        vpn_types = [":vpn", ":wireguard", ":vpnc", ":pptp", ":openconnect", ":openvpn"]
+
+        for line in result.stdout.strip().split("\n"):
             # Check if line contains any VPN type
             if any(vpn_type in line for vpn_type in vpn_types):
-                name = line.split(':')[0]
-                vpns.append({
-                    'name': name,
-                    'active': name == active_vpn
-                })
-        return sorted(vpns, key=lambda x: (not x['active'], x['name']))
+                name = line.split(":")[0]
+                vpns.append({"name": name, "active": name == active_vpn})
+        return sorted(vpns, key=lambda x: (not x["active"], x["name"]))
     except:
         return []
+
 
 def get_active_vpn():
     """Get currently active VPN connection name"""
     try:
-        result = subprocess.run(['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show', '--active'],
-                               capture_output=True, text=True, check=True)
-        
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show", "--active"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
         # VPN types supported by NetworkManager
-        vpn_types = [':vpn', ':wireguard', ':vpnc', ':pptp', ':openconnect', ':openvpn']
-        
-        for line in result.stdout.strip().split('\n'):
+        vpn_types = [":vpn", ":wireguard", ":vpnc", ":pptp", ":openconnect", ":openvpn"]
+
+        for line in result.stdout.strip().split("\n"):
             if any(vpn_type in line for vpn_type in vpn_types):
-                return line.split(':')[0]
+                return line.split(":")[0]
         return None
     except:
         return None
+
 
 def connect_vpn(name):
     """Connect to VPN by name"""
     try:
-        result = subprocess.run(['nmcli', 'connection', 'up', name],
-                               capture_output=True, text=True)
+        result = subprocess.run(["nmcli", "connection", "up", name], capture_output=True, text=True)
         return result.returncode == 0, result.stderr or result.stdout
     except Exception as e:
         return False, str(e)
 
+
 def disconnect_vpn(name):
     """Disconnect VPN by name"""
     try:
-        result = subprocess.run(['nmcli', 'connection', 'down', name],
-                               capture_output=True, text=True)
+        result = subprocess.run(
+            ["nmcli", "connection", "down", name], capture_output=True, text=True
+        )
         return result.returncode == 0
     except:
         return False
+
 
 def get_modem_info():
     """Get modem information via ModemManager"""
     try:
         # Get modem list
-        result = subprocess.run(['mmcli', '--list-modems'],
-                               capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            ["mmcli", "--list-modems"], capture_output=True, text=True, check=True
+        )
 
         # Extract modem ID from output (e.g., "/org/freedesktop/ModemManager1/Modem/2")
         modem_id = None
-        for line in result.stdout.strip().split('\n'):
-            if '/Modem/' in line:
-                modem_id = line.split('/Modem/')[-1].split()[0]
+        for line in result.stdout.strip().split("\n"):
+            if "/Modem/" in line:
+                modem_id = line.split("/Modem/")[-1].split()[0]
                 break
 
         if not modem_id:
             return None
 
         # Get detailed modem info
-        result = subprocess.run(['mmcli', '-m', modem_id],
-                               capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            ["mmcli", "-m", modem_id], capture_output=True, text=True, check=True
+        )
 
-        info = {'signal': '0%', 'operator': '-', 'tech': '-', 'state': 'unknown'}
+        info = {"signal": "0%", "operator": "-", "tech": "-", "state": "unknown"}
 
-        for line in result.stdout.split('\n'):
+        for line in result.stdout.split("\n"):
             line = line.strip()
-            if 'signal quality:' in line:
+            if "signal quality:" in line:
                 # Extract percentage (e.g., "48% (cached)")
-                info['signal'] = line.split(':')[1].strip().split()[0]
-            elif 'operator name:' in line:
-                info['operator'] = line.split(':')[1].strip()
-            elif 'access tech:' in line:
-                info['tech'] = line.split(':')[1].strip().upper()
-            elif 'state:' in line:
+                info["signal"] = line.split(":")[1].strip().split()[0]
+            elif "operator name:" in line:
+                info["operator"] = line.split(":")[1].strip()
+            elif "access tech:" in line:
+                info["tech"] = line.split(":")[1].strip().upper()
+            elif "state:" in line:
                 # Extract state, removing ANSI color codes
-                state = line.split(':')[1].strip()
+                state = line.split(":")[1].strip()
                 # Remove ANSI codes like [32mconnected[0m
-                state = state.replace('[32m', '').replace('[0m', '')
-                info['state'] = state
+                state = state.replace("[32m", "").replace("[0m", "")
+                info["state"] = state
 
         return info
     except:
         return None
 
+
 def get_wwan_list():
     """Get all WWAN (cellular) connections configured in NetworkManager"""
     try:
-        result = subprocess.run(['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show'],
-                               capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
         active_wwan = get_active_wwan()
         modem_info = get_modem_info()
 
         wwans = []
-        for line in result.stdout.strip().split('\n'):
-            if ':gsm' in line:
-                name = line.split(':')[0]
-                wwan_entry = {
-                    'name': name,
-                    'active': name == active_wwan
-                }
+        for line in result.stdout.strip().split("\n"):
+            if ":gsm" in line:
+                name = line.split(":")[0]
+                wwan_entry = {"name": name, "active": name == active_wwan}
 
                 # Add modem info if connection is active
-                if wwan_entry['active'] and modem_info:
-                    wwan_entry['signal'] = modem_info['signal']
-                    wwan_entry['operator'] = modem_info['operator']
-                    wwan_entry['tech'] = modem_info['tech']
+                if wwan_entry["active"] and modem_info:
+                    wwan_entry["signal"] = modem_info["signal"]
+                    wwan_entry["operator"] = modem_info["operator"]
+                    wwan_entry["tech"] = modem_info["tech"]
                 else:
-                    wwan_entry['signal'] = '-'
-                    wwan_entry['operator'] = '-'
-                    wwan_entry['tech'] = '-'
+                    wwan_entry["signal"] = "-"
+                    wwan_entry["operator"] = "-"
+                    wwan_entry["tech"] = "-"
 
                 wwans.append(wwan_entry)
 
-        return sorted(wwans, key=lambda x: (not x['active'], x['name']))
+        return sorted(wwans, key=lambda x: (not x["active"], x["name"]))
     except:
         return []
+
 
 def get_active_wwan():
     """Get currently active WWAN connection name"""
     try:
-        result = subprocess.run(['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show', '--active'],
-                               capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show", "--active"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
-        for line in result.stdout.strip().split('\n'):
-            if ':gsm' in line:
-                return line.split(':')[0]
+        for line in result.stdout.strip().split("\n"):
+            if ":gsm" in line:
+                return line.split(":")[0]
         return None
     except:
         return None
 
+
 def connect_wwan(name):
     """Connect to WWAN by name"""
     try:
-        result = subprocess.run(['nmcli', 'connection', 'up', name],
-                               capture_output=True, text=True)
+        result = subprocess.run(["nmcli", "connection", "up", name], capture_output=True, text=True)
         return result.returncode == 0, result.stderr or result.stdout
     except Exception as e:
         return False, str(e)
 
+
 def disconnect_wwan(name):
     """Disconnect WWAN by name"""
     try:
-        result = subprocess.run(['nmcli', 'connection', 'down', name],
-                               capture_output=True, text=True)
+        result = subprocess.run(
+            ["nmcli", "connection", "down", name], capture_output=True, text=True
+        )
         return result.returncode == 0
     except:
         return False

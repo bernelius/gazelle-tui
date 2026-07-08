@@ -1,6 +1,5 @@
 """Gazelle - Minimal NetworkManager TUI"""
-import os
-os.environ["RICH_COLOR_SYSTEM"] = "standard"
+
 from textual.app import App, ComposeResult
 from textual.theme import Theme
 from textual.widgets import Header, Footer, Static, Input, Button, DataTable, Select
@@ -12,6 +11,7 @@ import subprocess
 import asyncio
 import json
 from pathlib import Path
+
 try:
     import tomllib  # Python 3.11+
 except ImportError:
@@ -20,58 +20,72 @@ except ImportError:
     except ImportError:
         tomllib = None  # Will use fallback colors
 
+
 def normalize_color_format(color):
     """Convert 0xRRGGBB to #RRGGBB for CSS/Textual compatibility.
-    
+
     Args:
         color: Color string in any format
-    
+
     Returns:
         Color string in CSS format (#RRGGBB)
     """
-    if isinstance(color, str) and color.startswith('0x'):
-        return '#' + color[2:]
+    if isinstance(color, str) and color.startswith("0x"):
+        return "#" + color[2:]
     return color
+
 
 class HiddenNetworkScreen(ModalScreen):
     """Modal for connecting to hidden SSID"""
-    
+
     BINDINGS = [
         ("enter", "submit", "Submit"),
         ("escape", "cancel", "Cancel"),
     ]
-    
+
     def compose(self) -> ComposeResult:
         yield Container(
             Static("Connect to Hidden Network", id="title"),
-            Static("SSID:"), Input(placeholder="Network name", id="ssid"),
+            Static("SSID:"),
+            Input(placeholder="Network name", id="ssid"),
             Static("Security:"),
-            Select([("Open", "open"), ("WPA2/WPA3", "psk"), ("802.1X Enterprise", "8021x")], 
-                   value="psk", id="sec"),
-            Horizontal(Button("Next", variant="primary", id="next"), Button("Cancel", id="cancel")),
-            id="dialog"
+            Select(
+                [
+                    ("Open", "open"),
+                    ("WPA2/WPA3", "psk"),
+                    ("802.1X Enterprise", "8021x"),
+                ],
+                value="psk",
+                id="sec",
+            ),
+            Horizontal(
+                Button("Next", variant="primary", id="next"),
+                Button("Cancel", id="cancel"),
+            ),
+            id="dialog",
         )
-    
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel":
             self.app.pop_screen()
         elif event.button.id == "next":
             self._submit()
-    
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle Enter key in Input field"""
         self._submit()
-    
+
     def _submit(self) -> None:
         """Submit the form"""
         ssid = self.query_one("#ssid", Input).value
         sec = self.query_one("#sec", Select).value
         if ssid:
             self.dismiss((ssid, sec))
-    
+
     def action_cancel(self) -> None:
         """Handle Esc key"""
         self.app.pop_screen()
+
 
 class VPNScreen(ModalScreen):
     """Screen for VPN connection management"""
@@ -89,7 +103,7 @@ class VPNScreen(ModalScreen):
         yield Container(
             Static("VPN Connections", classes="section-title"),
             DataTable(id="vpn-table", cursor_type="row"),
-            classes="section"
+            classes="section",
         )
 
     def on_mount(self) -> None:
@@ -104,8 +118,8 @@ class VPNScreen(ModalScreen):
         table = self.query_one("#vpn-table", DataTable)
         table.clear()
         for vpn in get_vpn_list():
-            status = "🟢" if vpn['active'] else "⚪"
-            table.add_row(status, vpn['name'])
+            status = "🟢" if vpn["active"] else "⚪"
+            table.add_row(status, vpn["name"])
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection (Enter key)"""
@@ -152,6 +166,7 @@ class VPNScreen(ModalScreen):
         """Return to main screen on Escape"""
         self.app.pop_screen()
 
+
 class WWANScreen(ModalScreen):
     """Screen for WWAN (cellular) connection management"""
 
@@ -168,7 +183,7 @@ class WWANScreen(ModalScreen):
         yield Container(
             Static("WWAN Connections", classes="section-title"),
             DataTable(id="wwan-table", cursor_type="row"),
-            classes="section"
+            classes="section",
         )
 
     def on_mount(self) -> None:
@@ -188,13 +203,13 @@ class WWANScreen(ModalScreen):
             table.add_row("⚪", "No WWAN connections found", "-", "-", "-")
         else:
             for wwan in wwans:
-                status = "🟢" if wwan['active'] else "⚪"
+                status = "🟢" if wwan["active"] else "⚪"
                 table.add_row(
                     status,
-                    wwan['name'],
-                    wwan.get('signal', '-'),
-                    wwan.get('operator', '-'),
-                    wwan.get('tech', '-')
+                    wwan["name"],
+                    wwan.get("signal", "-"),
+                    wwan.get("operator", "-"),
+                    wwan.get("tech", "-"),
                 )
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
@@ -246,6 +261,7 @@ class WWANScreen(ModalScreen):
         """Return to main screen on Escape"""
         self.app.pop_screen()
 
+
 class Wired8021xScreen(ModalScreen):
     """Modal for connecting to wired 802.1X network"""
 
@@ -260,14 +276,30 @@ class Wired8021xScreen(ModalScreen):
             Static("Connection Name:"),
             Input(placeholder="e.g. office-wired", id="con_name"),
             Static("EAP Method:"),
-            Select([("PEAP", "peap"), ("TTLS", "ttls"), ("TLS", "tls")], value="peap", id="eap"),
+            Select(
+                [("PEAP", "peap"), ("TTLS", "ttls"), ("TLS", "tls")],
+                value="peap",
+                id="eap",
+            ),
             Static("Phase 2 Auth:"),
-            Select([("MSCHAPv2", "mschapv2"), ("MSCHAP", "mschap"), ("PAP", "pap"),
-                   ("CHAP", "chap"), ("GTC", "gtc"), ("MD5", "md5")], value="mschapv2", id="phase2"),
-            Static("Username:"), Input(placeholder="user@domain.com", id="user"),
-            Static("Password:"), Input(placeholder="Password", password=True, id="pwd"),
+            Select(
+                [
+                    ("MSCHAPv2", "mschapv2"),
+                    ("MSCHAP", "mschap"),
+                    ("PAP", "pap"),
+                    ("CHAP", "chap"),
+                    ("GTC", "gtc"),
+                    ("MD5", "md5"),
+                ],
+                value="mschapv2",
+                id="phase2",
+            ),
+            Static("Username:"),
+            Input(placeholder="user@domain.com", id="user"),
+            Static("Password:"),
+            Input(placeholder="Password", password=True, id="pwd"),
             Horizontal(Button("Connect", variant="primary", id="ok"), Button("Cancel", id="no")),
-            id="dialog"
+            id="dialog",
         )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -298,48 +330,72 @@ class Wired8021xScreen(ModalScreen):
         """Handle Enter key binding"""
         self._submit()
 
+
 class PasswordScreen(ModalScreen):
     BINDINGS = [
         ("enter", "submit", "Submit"),
         ("escape", "cancel", "Cancel"),
     ]
-    
+
     def __init__(self, ssid, is_enterprise=False, is_hidden=False):
         super().__init__()
         self.ssid, self.is_enterprise, self.is_hidden = ssid, is_enterprise, is_hidden
-    
+
     def compose(self) -> ComposeResult:
         if self.is_enterprise:
             yield Container(
                 Static(f"Connect: {self.ssid}", id="title"),
                 Static("EAP Method:"),
-                Select([("PEAP", "peap"), ("TTLS", "ttls"), ("TLS", "tls")], value="peap", id="eap"),
+                Select(
+                    [("PEAP", "peap"), ("TTLS", "ttls"), ("TLS", "tls")],
+                    value="peap",
+                    id="eap",
+                ),
                 Static("Phase 2 Auth:"),
-                Select([("MSCHAPv2", "mschapv2"), ("MSCHAP", "mschap"), ("PAP", "pap"), 
-                       ("CHAP", "chap"), ("GTC", "gtc"), ("MD5", "md5")], value="mschapv2", id="phase2"),
-                Static("Username:"), Input(placeholder="user@domain.com", id="user"),
-                Static("Password:"), Input(placeholder="Password", password=True, id="pwd"),
-                Horizontal(Button("Connect", variant="primary", id="ok"), Button("Cancel", id="no")),
-                id="dialog"
+                Select(
+                    [
+                        ("MSCHAPv2", "mschapv2"),
+                        ("MSCHAP", "mschap"),
+                        ("PAP", "pap"),
+                        ("CHAP", "chap"),
+                        ("GTC", "gtc"),
+                        ("MD5", "md5"),
+                    ],
+                    value="mschapv2",
+                    id="phase2",
+                ),
+                Static("Username:"),
+                Input(placeholder="user@domain.com", id="user"),
+                Static("Password:"),
+                Input(placeholder="Password", password=True, id="pwd"),
+                Horizontal(
+                    Button("Connect", variant="primary", id="ok"),
+                    Button("Cancel", id="no"),
+                ),
+                id="dialog",
             )
         else:
             yield Container(
                 Static(f"Connect: {self.ssid}", id="title"),
-                Static("Password:"), Input(placeholder="Password", password=True, id="pwd"),
-                Horizontal(Button("Connect", variant="primary", id="ok"), Button("Cancel", id="no")),
-                id="dialog"
+                Static("Password:"),
+                Input(placeholder="Password", password=True, id="pwd"),
+                Horizontal(
+                    Button("Connect", variant="primary", id="ok"),
+                    Button("Cancel", id="no"),
+                ),
+                id="dialog",
             )
-    
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "no":
             self.app.pop_screen()
         elif event.button.id == "ok":
             self._submit()
-    
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle Enter key in Input fields"""
         self._submit()
-    
+
     def _submit(self) -> None:
         """Submit the form"""
         if self.is_enterprise:
@@ -353,10 +409,11 @@ class PasswordScreen(ModalScreen):
             p = self.query_one("#pwd", Input).value
             if p:
                 self.dismiss((self.ssid, p, None, False, None, None, self.is_hidden))
-    
+
     def action_cancel(self) -> None:
         """Handle Esc key"""
         self.app.pop_screen()
+
 
 def load_omarchy_colors():
     """
@@ -365,23 +422,25 @@ def load_omarchy_colors():
     """
     if tomllib is None:
         return None
-    
+
     theme_file = Path.home() / ".config/omarchy/current/theme/alacritty.toml"
-    
+
     if not theme_file.exists():
         return None
-    
+
     try:
         with open(theme_file, "rb") as f:
             data = tomllib.load(f)
-        
+
         colors = data.get("colors", {})
         normal = colors.get("normal", {})
         bright = colors.get("bright", {})
         primary = colors.get("primary", {})
-        
+
         return {
-            "accent": normalize_color_format(normal.get("yellow") or bright.get("yellow") or "#EBCB8B"),
+            "accent": normalize_color_format(
+                normal.get("yellow") or bright.get("yellow") or "#EBCB8B"
+            ),
             "primary": normalize_color_format(normal.get("red") or bright.get("red") or "#BF616A"),
             "foreground": normalize_color_format(primary.get("foreground") or "#D8DEE9"),
             "background": normalize_color_format(primary.get("background") or "#2E3440"),
@@ -389,6 +448,7 @@ def load_omarchy_colors():
     except Exception:
         # If parsing fails, return None to use fallback
         return None
+
 
 def load_omarchy_styles():
     """
@@ -454,6 +514,7 @@ def load_omarchy_styles():
         "section_border": border_style,
     }
 
+
 def load_user_colors(config_dir: Path):
     """
     Load colors from user defined theme file.
@@ -477,7 +538,9 @@ def load_user_colors(config_dir: Path):
         primary = colors.get("primary", {})
 
         return {
-            "accent": normalize_color_format(normal.get("yellow") or bright.get("yellow") or "#EBCB8B"),
+            "accent": normalize_color_format(
+                normal.get("yellow") or bright.get("yellow") or "#EBCB8B"
+            ),
             "primary": normalize_color_format(normal.get("red") or bright.get("red") or "#BF616A"),
             "foreground": normalize_color_format(primary.get("foreground") or "#D8DEE9"),
             "background": normalize_color_format(primary.get("background") or "#2E3440"),
@@ -485,6 +548,7 @@ def load_user_colors(config_dir: Path):
     except Exception:
         # If parsing fails, return None to use fallback
         return None
+
 
 # Default style values matching the original hardcoded CSS
 DEFAULT_STYLES = {
@@ -505,7 +569,26 @@ DEFAULT_STYLES = {
 }
 
 # Valid Textual border styles for validation
-VALID_BORDER_STYLES = {"none", "ascii", "blank", "dashed", "double", "heavy", "hidden", "hkey", "inner", "outer", "panel", "round", "solid", "tall", "thick", "vkey", "wide"}
+VALID_BORDER_STYLES = {
+    "none",
+    "ascii",
+    "blank",
+    "dashed",
+    "double",
+    "heavy",
+    "hidden",
+    "hkey",
+    "inner",
+    "outer",
+    "panel",
+    "round",
+    "solid",
+    "tall",
+    "thick",
+    "vkey",
+    "wide",
+}
+
 
 def load_user_styles(config_dir: Path, omarchy_styles: dict = None):
     """
@@ -549,40 +632,68 @@ def load_user_styles(config_dir: Path, omarchy_styles: dict = None):
 
     return styles
 
+
 def build_css(styles: dict) -> str:
     """Build Textual CSS string from style configuration."""
     return f"""
     PasswordScreen, HiddenNetworkScreen, Wired8021xScreen {{ align: center middle; }}
-    #dialog {{ width: {styles['dialog_width']}; height: auto; border: {styles['dialog_border']} $accent; background: $background; padding: {styles['dialog_padding']}; }}
-    #title {{ text-style: {styles['title_text_style']}; color: $accent; margin-bottom: 1; }}
-    .section {{ border: {styles['section_border']} $accent; margin: {styles['section_margin']}; padding: {styles['section_padding']}; }}
-    .section-title {{ text-style: {styles['section_title_text_style']}; color: $accent; background: $background; padding: {styles['section_title_padding']}; }}
-    #device-section, #station-section {{ height: {styles['info_section_height']}; }}
+    #dialog {{ width: {styles["dialog_width"]}; height: auto; border: {styles["dialog_border"]} $accent; background: $background; padding: {styles["dialog_padding"]}; }}
+    #title {{ text-style: {styles["title_text_style"]}; color: $accent; margin-bottom: 1; }}
+    .section {{ border: {styles["section_border"]} $accent; margin: {styles["section_margin"]}; padding: {styles["section_padding"]}; }}
+    .section-title {{ text-style: {styles["section_title_text_style"]}; color: $accent; background: $background; padding: {styles["section_title_padding"]}; }}
+    #device-section, #station-section {{ height: {styles["info_section_height"]}; }}
     Static {{ height: auto; }}
-    Input {{ height: {styles['input_height']}; margin-bottom: 1; }}
-    Select {{ height: {styles['input_height']}; margin-bottom: 1; }}
+    Input {{ height: {styles["input_height"]}; margin-bottom: 1; }}
+    Select {{ height: {styles["input_height"]}; margin-bottom: 1; }}
     Horizontal {{ height: auto; margin-top: 1; }}
-    Button {{ min-width: {styles['button_min_width']}; }}
+    Button {{ min-width: {styles["button_min_width"]}; }}
 
     /* DataTable selection/cursor colors */
     DataTable > .datatable--cursor {{
-        background: $accent {styles['cursor_opacity']};
+        background: $accent {styles["cursor_opacity"]};
         color: $foreground;
     }}
 
     DataTable > .datatable--hover {{
-        background: $accent {styles['hover_opacity']};
+        background: $accent {styles["hover_opacity"]};
     }}
     """
+
+
+def resolve_theme(saved_theme, has_user_theme, has_omarchy_theme, theme_exists):
+    """Determine the effective theme and whether it should be persisted.
+
+    config.json is the source of truth: if it names a valid theme, that theme
+    is used unchanged. Otherwise the app auto-detects a default and the result
+    is written back to config.json.
+
+    Args:
+        saved_theme: Theme name from config.json, or None.
+        has_user_theme: True if a user theme.toml was loaded successfully.
+        has_omarchy_theme: True if an Omarchy theme was detected.
+        theme_exists: Callable that returns True for available theme names.
+
+    Returns:
+        Tuple of (effective_theme_name, should_save_to_config).
+    """
+    if saved_theme and theme_exists(saved_theme):
+        return saved_theme, False
+
+    if has_user_theme:
+        return "user-theme", True
+    if has_omarchy_theme:
+        return "omarchy-auto", True
+    return "textual-dark", True
+
 
 def try_create_user_theme_template(config_dir: Path):
     """If file doesn't exist, create a template theme.toml file with commented examples"""
     theme_file = config_dir / "theme.toml"
     theme_dir = theme_file.parent
-    
+
     # Create directory if it doesn't exist
     theme_dir.mkdir(parents=True, exist_ok=True)
-    
+
     if not theme_file.exists():
         template_content = """# Gazelle Theme Configuration
 # Uncomment and modify these values to customize your theme
@@ -635,9 +746,8 @@ def try_create_user_theme_template(config_dir: Path):
         return True
     return False
 
-class Gazelle(App):
-    ansi_color = True  # Enable terminal ANSI color support
 
+class Gazelle(App):
     TITLE = "Gazelle"
     CONFIG_DIR = Path.home() / ".config" / "gazelle"
     CONFIG_FILE = CONFIG_DIR / "config.json"
@@ -663,28 +773,42 @@ class Gazelle(App):
         Binding("e", "wired_8021x", "802.1X Wired"),
         Binding("?", "help", "Help"),
     ]
-    
+
     def compose(self) -> ComposeResult:
         yield Header()
         yield ScrollableContainer(
-            Container(Static("Device", classes="section-title"), 
-                     DataTable(id="dev"), classes="section", id="device-section"),
-            Container(Static("Station", classes="section-title"),
-                     DataTable(id="sta"), classes="section", id="station-section"),
-            Container(Static("Known Networks", classes="section-title"),
-                     DataTable(id="known", cursor_type="row"), classes="section"),
-            Container(Static("New Networks", classes="section-title"),
-                     DataTable(id="new", cursor_type="row"), classes="section"),
+            Container(
+                Static("Device", classes="section-title"),
+                DataTable(id="dev"),
+                classes="section",
+                id="device-section",
+            ),
+            Container(
+                Static("Station", classes="section-title"),
+                DataTable(id="sta"),
+                classes="section",
+                id="station-section",
+            ),
+            Container(
+                Static("Known Networks", classes="section-title"),
+                DataTable(id="known", cursor_type="row"),
+                classes="section",
+            ),
+            Container(
+                Static("New Networks", classes="section-title"),
+                DataTable(id="new", cursor_type="row"),
+                classes="section",
+            ),
         )
         yield Footer()
-    
+
     def on_mount(self) -> None:
-        # Try to load Omarchy colors
-        omarchy_colors = load_omarchy_colors()
-        # Try to load custom theme
+        # Load color sources
         user_colors = load_user_colors(self.CONFIG_DIR)
+        omarchy_colors = load_omarchy_colors()
+
+        # Register custom themes when their source colors are available
         if user_colors:
-            # Register theme with exact RGB values
             self.register_theme(
                 Theme(
                     name="user-theme",
@@ -698,9 +822,8 @@ class Gazelle(App):
                     dark=True,
                 )
             )
-            default_theme = "user-theme"
+
         if omarchy_colors:
-            # Register Omarchy-specific theme with exact RGB values
             self.register_theme(
                 Theme(
                     name="omarchy-auto",
@@ -714,72 +837,62 @@ class Gazelle(App):
                     dark=True,
                 )
             )
-            if not user_colors:
-                default_theme = "omarchy-auto"
-        else:
-            # Fallback: Use ANSI colors for non-Omarchy users
-            self.register_theme(
-                Theme(
-                    name="auto",
-                    primary="ansi_yellow",
-                    secondary="ansi_cyan",
-                    accent="ansi_yellow",
-                    foreground="ansi_white",
-                    background="ansi_black",
-                    surface="ansi_black",
-                    panel="ansi_black",
-                    dark=True,
-                )
-            )
-            if not user_colors:
-                default_theme = "auto"
 
-        # Load saved theme or use default
+        # Always register the ANSI theme so users can select it manually
+        self.register_theme(
+            Theme(
+                name="ansi",
+                primary="ansi_yellow",
+                secondary="ansi_cyan",
+                accent="ansi_yellow",
+                foreground="ansi_white",
+                background="ansi_black",
+                surface="ansi_black",
+                panel="ansi_black",
+                dark=True,
+                ansi=True,
+            )
+        )
+
+        # config.json is the source of truth for the active theme
         config = self.load_config()
-        saved_theme = config.get("theme", default_theme)
+        saved_theme = config.get("theme")
 
-        # If config requests user-theme but colors couldn't be loaded
-        # (e.g. first run before theme.toml is customized, or Nix-managed config),
-        # register it with fallback colors so the theme name is valid.
-        if saved_theme == "user-theme" and not user_colors:
-            self.register_theme(
-                Theme(
-                    name="user-theme",
-                    primary="#BF616A",
-                    secondary="#EBCB8B",
-                    accent="#EBCB8B",
-                    foreground="#D8DEE9",
-                    background="#2E3440",
-                    surface="#2E3440",
-                    panel="#2E3440",
-                    dark=True,
-                )
-            )
+        effective_theme, should_save = resolve_theme(
+            saved_theme,
+            user_colors is not None,
+            omarchy_colors is not None,
+            lambda name: self.get_theme(name) is not None,
+        )
+
+        if should_save:
+            config["theme"] = effective_theme
+            self.save_config(config)
 
         try:
-            self.theme = saved_theme
+            self.theme = effective_theme
         except Exception:
-            self.theme = default_theme
-        
+            self.theme = "textual-dark"
+
         self.query_one("#dev").add_columns("Name", "Mode", "Powered", "Address")
         self.query_one("#dev").cursor_type = "none"
         self.query_one("#sta").add_columns("State", "Scanning", "Frequency", "Security")
         self.query_one("#sta").cursor_type = "none"
         self.query_one("#known").add_columns("Name", "Security", "Signal")
         self.query_one("#new").add_columns("Name", "Security", "Signal")
-        
+
         # Show placeholder while scanning
         new_table = self.query_one("#new")
         new_table.add_row("Scanning for networks...", "", "")
-        
+
         # Trigger async network scan
         self.run_worker(self.scan_networks_async, exclusive=True)
-        
+
         self.query_one("#new").focus()
 
     def load_config(self) -> dict:
         """Load configuration from ~/.config/gazelle/config.json
-        
+
         Returns:
             dict: Configuration dictionary, or empty dict if file doesn't exist
         """
@@ -790,27 +903,27 @@ class Gazelle(App):
             # If config is corrupted, log error and return empty dict
             self.log.error(f"Failed to load config: {e}")
         return {}
-    
+
     def save_config(self, data: dict) -> None:
         """Save configuration to ~/.config/gazelle/config.json
-        
+
         Args:
             data: Dictionary to save as JSON
         """
         try:
             # Create config directory if it doesn't exist
             self.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-            
+
             # Write config file with pretty formatting
             self.CONFIG_FILE.write_text(json.dumps(data, indent=2))
         except OSError as e:
             self.log.error(f"Failed to save config: {e}")
-    
+
     def watch_theme(self, new_theme: str) -> None:
         """Automatically called by Textual when self.theme changes.
-        
+
         Saves the new theme to config file for persistence.
-        
+
         Args:
             new_theme: The new theme name that was just set
         """
@@ -819,7 +932,7 @@ class Gazelle(App):
         config["theme"] = new_theme
         self.save_config(config)
         self.log.info(f"Theme changed to: {new_theme}")
-    
+
     async def scan_networks_async(self) -> None:
         """Async WiFi network scanning in background"""
         try:
@@ -829,57 +942,66 @@ class Gazelle(App):
             self.refresh_all()
         except Exception as e:
             self.notify(f"Scan failed: {str(e)}")
-    
+
     def refresh_all(self) -> None:
         # Device
         t = self.query_one("#dev")
         t.clear()
         iface = get_wifi_interface()
         try:
-            mac = subprocess.run(['cat', f'/sys/class/net/{iface}/address'], 
-                                capture_output=True, text=True).stdout.strip()
+            mac = subprocess.run(
+                ["cat", f"/sys/class/net/{iface}/address"],
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
         except:
             mac = "-"
         t.add_row(iface, "station", "On" if wifi_enabled() else "Off", mac)
-        
+
         # Add WWAN status if wwan device exists
         try:
             # Use nmcli to detect if any gsm/wwan device exists
-            r = subprocess.run(['nmcli', '-t', '-f', 'DEVICE,TYPE', 'device'], 
-                             capture_output=True, text=True)
+            r = subprocess.run(
+                ["nmcli", "-t", "-f", "DEVICE,TYPE", "device"],
+                capture_output=True,
+                text=True,
+            )
             wwan_iface = None
-            for line in r.stdout.strip().split('\n'):
-                if ':gsm' in line:
-                    wwan_iface = line.split(':')[0]
+            for line in r.stdout.strip().split("\n"):
+                if ":gsm" in line:
+                    wwan_iface = line.split(":")[0]
                     break
-            
+
             if wwan_iface:
                 # Try to get MAC or IMEI? Just show iface for now
                 t.add_row(wwan_iface, "wwan", "On" if wwan_enabled() else "Off", "-")
         except:
             pass
-        
+
         # Station
         t = self.query_one("#sta")
         t.clear()
         i = get_station_info()
-        t.add_row(i['state'], i['scanning'], i['frequency'], i['security'])
-        
+        t.add_row(i["state"], i["scanning"], i["frequency"], i["security"])
+
         # Known (only show networks that are in range)
         t = self.query_one("#known")
         t.clear()
         known_ssids = set()
         try:
-            r = subprocess.run(['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show'],
-                              capture_output=True, text=True)
-            avail = {n['ssid']: n for n in get_wifi_list()}
-            for line in r.stdout.strip().split('\n'):
-                if ':802-11-wireless' in line or ':wifi' in line:
-                    name = line.split(':')[0]
+            r = subprocess.run(
+                ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
+                capture_output=True,
+                text=True,
+            )
+            avail = {n["ssid"]: n for n in get_wifi_list()}
+            for line in r.stdout.strip().split("\n"):
+                if ":802-11-wireless" in line or ":wifi" in line:
+                    name = line.split(":")[0]
                     known_ssids.add(name)
                     # Only show if network is in range
                     if name in avail:
-                        s = avail[name]['security']
+                        s = avail[name]["security"]
                         if is_enterprise(s):
                             sec = "802.1x"
                         elif is_owe(s):
@@ -892,22 +1014,22 @@ class Gazelle(App):
                         t.add_row(name, sec, sig)
         except:
             pass
-        
+
         # New (exclude networks that are already known)
         t = self.query_one("#new")
         t.clear()
         for n in get_wifi_list():
-            if n['ssid'] not in known_ssids:
-                if is_enterprise(n['security']):
+            if n["ssid"] not in known_ssids:
+                if is_enterprise(n["security"]):
                     sec = "802.1x"
-                elif is_owe(n['security']):
+                elif is_owe(n["security"]):
                     sec = "owe"
-                elif n['security']:
+                elif n["security"]:
                     sec = "psk"
                 else:
                     sec = "-"
-                t.add_row(n['ssid'], sec, f"{n['signal']}%")
-    
+                t.add_row(n["ssid"], sec, f"{n['signal']}%")
+
     def _get_focused_table(self):
         """Get the currently focused table"""
         known = self.query_one("#known")
@@ -916,17 +1038,17 @@ class Gazelle(App):
             return known
         else:
             return new
-    
+
     def action_cursor_down(self) -> None:
         t = self._get_focused_table()
         if t.row_count > 0:
             t.action_cursor_down()
-    
+
     def action_cursor_up(self) -> None:
         t = self._get_focused_table()
         if t.row_count > 0:
             t.action_cursor_up()
-    
+
     def action_switch_section(self) -> None:
         known = self.query_one("#known")
         new = self.query_one("#new")
@@ -934,24 +1056,25 @@ class Gazelle(App):
             new.focus()
         else:
             known.focus()
-    
+
     def action_scan(self) -> None:
         self.notify("Scanning...")
-        subprocess.run(['nmcli', 'device', 'wifi', 'rescan'], capture_output=True)
+        subprocess.run(["nmcli", "device", "wifi", "rescan"], capture_output=True)
         self.run_worker(self.scan_networks_async, exclusive=True)
-    
+
     def action_select(self) -> None:
         t = self._get_focused_table()
         is_known = self.query_one("#known").has_focus
-        
+
         if t.cursor_row >= 0 and t.cursor_row < t.row_count:
             row = t.get_row_at(t.cursor_row)
             ssid, sec = str(row[0]), str(row[1])
-            
+
             if is_known:
-                self.notify(f"Connecting...")
-                r = subprocess.run(['nmcli', 'connection', 'up', ssid], 
-                                  capture_output=True, text=True)
+                self.notify("Connecting...")
+                r = subprocess.run(
+                    ["nmcli", "connection", "up", ssid], capture_output=True, text=True
+                )
                 self.notify("✓ Connected" if r.returncode == 0 else "✗ Failed")
                 self.refresh_all()
             else:
@@ -963,21 +1086,24 @@ class Gazelle(App):
                     ok, msg = connect_wifi(ssid, "", hidden=False)
                     self.notify("✓ Connected" if ok else f"✗ {msg}")
                     self.refresh_all()
-    
+
     def handle_connect(self, result) -> None:
         if not result:
             return
         ssid, pwd, user, is_ent, eap, phase2, is_hidden = result
         self.notify("Connecting...")
         if is_ent:
-            ok, msg = connect_802_1x(ssid, user, pwd, eap or "peap", phase2 or "mschapv2", is_hidden)
+            ok, msg = connect_802_1x(
+                ssid, user, pwd, eap or "peap", phase2 or "mschapv2", is_hidden
+            )
         else:
             ok, msg = connect_wifi(ssid, pwd, is_hidden)
         self.notify("✓ Connected" if ok else f"✗ {msg}")
         self.refresh_all()
-    
+
     def action_hidden(self) -> None:
         """Connect to hidden network (h key)"""
+
         def handle_hidden(result):
             if not result:
                 return
@@ -988,16 +1114,22 @@ class Gazelle(App):
                 self.notify("✓ Connected" if ok else f"✗ {msg}")
                 self.refresh_all()
             elif sec == "psk":
-                self.push_screen(PasswordScreen(ssid, is_enterprise=False, is_hidden=True), self.handle_connect)
+                self.push_screen(
+                    PasswordScreen(ssid, is_enterprise=False, is_hidden=True),
+                    self.handle_connect,
+                )
             else:  # 8021x
-                self.push_screen(PasswordScreen(ssid, is_enterprise=True, is_hidden=True), self.handle_connect)
-        
+                self.push_screen(
+                    PasswordScreen(ssid, is_enterprise=True, is_hidden=True),
+                    self.handle_connect,
+                )
+
         self.push_screen(HiddenNetworkScreen(), handle_hidden)
-    
+
     def action_disconnect(self) -> None:
         self.notify("Disconnected" if disconnect() else "Not connected")
         self.refresh_all()
-    
+
     def action_forget(self) -> None:
         """Remove selected known network"""
         known = self.query_one("#known")
@@ -1016,24 +1148,24 @@ class Gazelle(App):
     def action_toggle_wifi(self) -> None:
         self.notify(f"WiFi {'ON' if toggle_wifi() else 'OFF'}")
         self.set_timer(1, self.refresh_all)
-        
+
     def action_toggle_wwan_radio(self) -> None:
         try:
             with open("/tmp/gazelle_debug.log", "a") as f:
                 f.write(f"Action Toggle WWAN Triggered. HAS_DBUS: {HAS_DBUS}\n")
-            
+
             result = toggle_wwan()
             msg = "ON" if result else "OFF"
-            
+
             with open("/tmp/gazelle_debug.log", "a") as f:
                 f.write(f"Toggle Result: {result} -> {msg}\n")
-                
+
             self.notify(f"WWAN {msg}")
             self.set_timer(1, self.refresh_all)
         except Exception as e:
             with open("/tmp/gazelle_debug.log", "a") as f:
                 f.write(f"Action Error: {e}\n")
-    
+
     def action_vpn_screen(self) -> None:
         """Open VPN management screen"""
         self.push_screen(VPNScreen())
@@ -1061,4 +1193,7 @@ class Gazelle(App):
         self.refresh_all()
 
     def action_help(self) -> None:
-        self.notify("j/k:Move Tab:Switch Space:Connect s:Scan h:Hidden v:VPN e:802.1X Wired d:Disconnect r:Forget q:Quit", timeout=5)
+        self.notify(
+            "j/k:Move Tab:Switch Space:Connect s:Scan h:Hidden v:VPN e:802.1X Wired d:Disconnect r:Forget q:Quit",
+            timeout=5,
+        )

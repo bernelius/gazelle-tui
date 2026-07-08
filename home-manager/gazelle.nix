@@ -15,7 +15,7 @@ in
 
     settings = mkOption {
       type = types.attrsOf types.str;
-      default = { theme = "auto"; };
+      default = { theme = "textual-dark"; };
       description = "Gazelle settings (will be written to ~/.config/gazelle/config.json)";
     };
   };

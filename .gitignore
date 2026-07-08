@@ -28,6 +28,9 @@ Thumbs.db
 # AUR (only needed in AUR repo)
 .SRCINFO
 
+# Tools
+.ruff_cache/
+
 # AI Assistant Development Files
 .claude/
 .serena/

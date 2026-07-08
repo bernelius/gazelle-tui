@@ -16,11 +16,21 @@ chmod +x gazelle
 
 With Nix: `nix develop` then `python3 gazelle`.
 
-There is no test suite. There is no CI/CD pipeline. There is no linter configured.
+CI runs via GitHub Actions on push/PR to `main`: ruff check, ruff format check, and pytest. All three must pass.
+
+## Linting & Testing
+
+```bash
+uv sync                       # install deps including dev
+uv run ruff check .           # lint
+uv run ruff format --check .  # check formatting
+uv run ruff format .          # auto-format
+uv run pytest -v              # run tests
+```
 
 ## Architecture
 
-The application is three files:
+The application is three files plus tests:
 
 - **`gazelle`** - Entry point script (8 lines). Imports and runs the `Gazelle` App class.
 - **`app.py`** - Main TUI application (~817 lines). Contains all UI: the `Gazelle(App)` main class plus modal screens (`PasswordScreen`, `VPNScreen`, `WWANScreen`, `HiddenNetworkScreen`). Uses Textual's reactive widget system with inline CSS for styling.
@@ -36,12 +46,14 @@ The application is three files:
 
 ### Theme System
 
-Three theme sources with priority:
-1. **Omarchy auto-detection** - reads `~/.config/omarchy/current/theme/alacritty.toml` (or `ghostty.conf`)
-2. **User custom theme** - `~/.config/gazelle/theme.toml`
-3. **Built-in Textual themes** - selected via command palette (`Ctrl+P`)
+`config.json["theme"]` is the source of truth once set. On first run, the app auto-detects a default in this order:
+1. **User custom theme** - `~/.config/gazelle/theme.toml`
+2. **Omarchy auto-detection** - reads `~/.config/omarchy/current/theme/alacritty.toml`
+3. **Built-in Textual themes** - `textual-dark` is the default
 
-Theme choice persists in `~/.config/gazelle/config.json`. Helper functions `load_omarchy_colors()`, `load_user_colors()`, and `normalize_color_format()` handle color loading and format conversion (0xRRGGBB to #RRGGBB).
+An `"ansi"` theme is always registered and can be selected manually via command palette (`Ctrl+P`) or by setting `"theme": "ansi"` in `config.json`.
+
+Theme choice persists in `~/.config/gazelle/config.json`. Helper functions `resolve_theme()`, `load_omarchy_colors()`, `load_user_colors()`, and `normalize_color_format()` handle theme resolution, color loading, and format conversion (0xRRGGBB to #RRGGBB).
 
 ### Configuration
 
