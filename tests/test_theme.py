@@ -46,11 +46,6 @@ class TestResolveTheme:
         assert theme == "textual-dark"
         assert save is True
 
-    def test_ansi_saved_theme_is_valid(self):
-        theme, save = resolve_theme("ansi", False, False, self._exists({"ansi", "textual-dark"}))
-        assert theme == "ansi"
-        assert save is False
-
     def test_user_theme_wins_even_when_omarchy_present(self):
         theme, save = resolve_theme(None, True, True, self._exists({"user-theme", "omarchy-auto"}))
         assert theme == "user-theme"
@@ -192,17 +187,9 @@ class TestOnMountThemeSelection:
         gazelle_app.on_mount()
 
         assert gazelle_app.theme == "textual-dark"
-        assert gazelle_app.get_theme("ansi") is not None
         assert gazelle_app.CONFIG_FILE.exists()
+
         assert json.loads(gazelle_app.CONFIG_FILE.read_text()) == {"theme": "textual-dark"}
-
-    def test_ansi_theme_can_be_selected_manually(self, gazelle_app):
-        gazelle_app.CONFIG_DIR.mkdir(parents=True)
-        gazelle_app.CONFIG_FILE.write_text(json.dumps({"theme": "ansi"}))
-
-        gazelle_app.on_mount()
-
-        assert gazelle_app.theme == "ansi"
 
     def test_existing_config_theme_is_source_of_truth(self, gazelle_app):
         gazelle_app.CONFIG_DIR.mkdir(parents=True)

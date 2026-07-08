@@ -838,22 +838,6 @@ class Gazelle(App):
                 )
             )
 
-        # Always register the ANSI theme so users can select it manually
-        self.register_theme(
-            Theme(
-                name="ansi",
-                primary="ansi_yellow",
-                secondary="ansi_cyan",
-                accent="ansi_yellow",
-                foreground="ansi_white",
-                background="ansi_black",
-                surface="ansi_black",
-                panel="ansi_black",
-                dark=True,
-                ansi=True,
-            )
-        )
-
         # config.json is the source of truth for the active theme
         config = self.load_config()
         saved_theme = config.get("theme")

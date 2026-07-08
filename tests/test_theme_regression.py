@@ -63,30 +63,6 @@ class TestAnsiColorMode:
         assert getattr(Gazelle, "ansi_color", None) is not True
 
 
-class TestAnsiThemeRegistration:
-    """The ANSI theme should be registered explicitly as 'ansi' with ansi=True."""
-
-    def test_ansi_theme_is_registered_with_ansi_flag(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        from app import Gazelle
-
-        config_dir = tmp_path / ".config" / "gazelle"
-        monkeypatch.setattr(Gazelle, "CONFIG_DIR", config_dir)
-        monkeypatch.setattr(Gazelle, "CONFIG_FILE", config_dir / "config.json")
-
-        app = Gazelle()
-        app.query_one = MagicMock(return_value=MagicMock())
-        app.run_worker = MagicMock()
-        app.on_mount()
-
-        ansi_theme = app.get_theme("ansi")
-        assert ansi_theme is not None
-        assert ansi_theme.primary == "ansi_yellow"
-        assert ansi_theme.secondary == "ansi_cyan"
-        assert ansi_theme.accent == "ansi_yellow"
-        assert getattr(ansi_theme, "ansi", None) is True
-
-
 class TestLegacyAutoThemeMigration:
     """Users upgrading from main with theme='auto' should migrate to textual-dark."""
 

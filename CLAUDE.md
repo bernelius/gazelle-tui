@@ -51,7 +51,7 @@ The application is three files plus tests:
 2. **Omarchy auto-detection** - reads `~/.config/omarchy/current/theme/alacritty.toml`
 3. **Built-in Textual themes** - `textual-dark` is the default
 
-An `"ansi"` theme is always registered and can be selected manually via command palette (`Ctrl+P`) or by setting `"theme": "ansi"` in `config.json`.
+Textual's built-in `"ansi-dark"` and `"ansi-light"` themes are available and can be selected manually via the command palette (`Ctrl+P`) or by setting `"theme": "ansi-dark"` / `"theme": "ansi-light"` in `config.json`.
 
 Theme choice persists in `~/.config/gazelle/config.json`. Helper functions `resolve_theme()`, `load_omarchy_colors()`, `load_user_colors()`, and `normalize_color_format()` handle theme resolution, color loading, and format conversion (0xRRGGBB to #RRGGBB).
 
