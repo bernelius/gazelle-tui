@@ -86,15 +86,33 @@ You can use Home Manager to declaratively configure Gazelle:
 ```nix
 programs.gazelle = {
   enable = true;
+
+  # To use the custom theme defined below, set this to "user-theme".
+  # Otherwise pick a built-in theme such as "textual-dark" or "ansi-dark".
   settings = {
-    theme = "nord"; # choose your theme
+    theme = "user-theme";
   };
+
+  theme = {
+    colors = {
+      accent     = "#EBCB8B";
+      primary    = "#BF616A";
+      foreground = "#D8DEE9";
+      background = "#2E3440";
+    };
+    styles = {
+      dialog_border = "round";
+      section_border = "round";
+    };
+  };
+};
 ```
 
 Home Manager will automatically generate:
 
 ```
 ~/.config/gazelle/config.json
+~/.config/gazelle/theme.toml
 ```
 
 with your chosen settings.
