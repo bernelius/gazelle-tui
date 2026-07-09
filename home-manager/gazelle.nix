@@ -108,11 +108,6 @@ let
                 default = null;
                 description = "Padding around section titles (Textual CSS units).";
               };
-              info_section_height = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Height of the device/station info sections.";
-              };
               input_height = mkOption {
                 type = types.nullOr types.str;
                 default = null;

@@ -441,7 +441,6 @@ section_border = "round"
 | `dialog_padding` | `1 2` | Modal dialog padding |
 | `section_margin` | `1 2` | Section margin |
 | `section_padding` | `0 1` | Section padding |
-| `info_section_height` | `5` | Device/Station section height |
 | `cursor_opacity` | `30%` | Selection highlight opacity |
 | `hover_opacity` | `20%` | Hover highlight opacity |
 

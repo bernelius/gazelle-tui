@@ -684,7 +684,6 @@ DEFAULT_STYLES = {
     "section_margin": "1 2",
     "section_padding": "0 1",
     "section_title_padding": "0 1",
-    "info_section_height": "5",
     "input_height": "3",
     "button_min_width": "12",
     "cursor_opacity": "30%",
@@ -844,7 +843,6 @@ def try_create_user_theme_template(config_dir: Path):
 #section_margin = "1 2"
 #section_padding = "0 1"
 #section_title_padding = "0 1"
-#info_section_height = "5"
 #input_height = "3"
 #button_min_width = "12"
 #cursor_opacity = "30%"
