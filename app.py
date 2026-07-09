@@ -768,7 +768,7 @@ def build_css(styles: dict) -> str:
     .section.active-section {{ border: {styles["section_border"]} $primary; }}
     .section-title {{ text-style: {styles["section_title_text_style"]}; color: $accent; background: $background; padding: {styles["section_title_padding"]}; height: auto; }}
     .section DataTable {{ height: 1fr; }}
-    #device-section, #station-section {{ height: {styles["info_section_height"]}; }}
+    #device-section, #station-section {{ height: 5; }}
     Static {{ height: auto; }}
     Input {{ height: {styles["input_height"]}; margin-bottom: 1; }}
     Select {{ height: {styles["input_height"]}; margin-bottom: 1; }}
@@ -870,6 +870,9 @@ class Gazelle(App):
 
     # Currently selected network section ("known" or "new") for visual highlighting.
     active_section = reactive(None)
+
+    # Hide the Device/Station info sections when the terminal is too short.
+    MIN_HEIGHT_FOR_INFO_SECTIONS = 22
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
@@ -977,7 +980,7 @@ class Gazelle(App):
         self.query_one("#dev").add_columns("Name", "Mode", "Powered", "Address")
         self.query_one("#dev").cursor_type = "none"
         self.query_one("#dev").can_focus = False
-        self.query_one("#sta").add_columns("State", "Scanning", "Frequency", "Security")
+        self.query_one("#sta").add_columns("State", "Frequency", "Security")
         self.query_one("#sta").cursor_type = "none"
         self.query_one("#sta").can_focus = False
         self.query_one("#known").add_columns("Name", "Security", "Signal")
@@ -992,6 +995,17 @@ class Gazelle(App):
 
         self.query_one("#new").focus()
         self.active_section = "new"
+        self.update_info_sections_visibility()
+
+    def update_info_sections_visibility(self) -> None:
+        """Hide Device/Station sections when the viewport is too short."""
+        tall_enough = self.size.height >= self.MIN_HEIGHT_FOR_INFO_SECTIONS
+        self.query_one("#device-section").display = tall_enough
+        self.query_one("#station-section").display = tall_enough
+
+    def on_resize(self) -> None:
+        """Re-evaluate section visibility when the terminal is resized."""
+        self.update_info_sections_visibility()
 
     def load_config(self) -> dict:
         """Load configuration from ~/.config/gazelle/config.json
@@ -1085,7 +1099,7 @@ class Gazelle(App):
         t = self.query_one("#sta")
         t.clear()
         i = get_station_info()
-        t.add_row(i["state"], i["scanning"], i["frequency"], i["security"])
+        t.add_row(i["state"], i["frequency"], i["security"])
 
         # Known (only show networks that are in range)
         t = self.query_one("#known")
