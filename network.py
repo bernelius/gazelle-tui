@@ -2,16 +2,8 @@
 
 import subprocess
 
-try:
-    import dbus
 
-    HAS_DBUS = True
-except ImportError:
-    HAS_DBUS = False
-
-
-def get_wifi_interface():
-    """Auto-detect WiFi interface"""
+def get_wifi_interface() -> str | None:
     try:
         result = subprocess.run(
             ["nmcli", "-t", "-f", "DEVICE,TYPE", "device"],
@@ -19,12 +11,15 @@ def get_wifi_interface():
             text=True,
             check=True,
         )
-        for line in result.stdout.strip().split("\n"):
-            if ":wifi" in line:
-                return line.split(":")[0]
-    except:
-        pass
-    return "wlan0"
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None
+
+    for line in result.stdout.splitlines():
+        device, dev_type = line.split(":", 1)
+        if dev_type == "wifi":
+            return device
+
+    return None
 
 
 def get_wifi_list():
@@ -73,31 +68,26 @@ def get_current_connection():
 
 def get_station_info():
     """Get station status"""
-    try:
-        current = get_current_connection()
-        info = {
-            "state": "connected" if current else "disconnected",
-            "scanning": "false",
-            "frequency": "-",
-            "security": "-",
-        }
-
-        if current:
-            result = subprocess.run(
-                ["nmcli", "-t", "-f", "ACTIVE,SSID,FREQ,SECURITY", "device", "wifi", "list"],
-                capture_output=True,
-                text=True,
-            )
-            for line in result.stdout.strip().split("\n"):
-                if line.startswith("yes:") or line.startswith("*:"):
-                    parts = line.split(":")
-                    if len(parts) >= 4:
-                        info["frequency"] = parts[2] or "-"
-                        info["security"] = parts[3] or "-"
-                    break
-        return info
-    except:
-        return {"state": "disconnected", "scanning": "false", "frequency": "-", "security": "-"}
+    info = {
+        "state": "disconnected",
+        "frequency": "-",
+        "security": "-",
+    }
+    current = get_current_connection()
+    if current:
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "ACTIVE,FREQ,SECURITY", "device", "wifi", "list"],
+            capture_output=True,
+            text=True,
+        )
+        for line in result.stdout.strip().split("\n"):
+            if line.startswith("yes:"):
+                parts = line.split(":")
+                info["state"] = "connected"
+                info["frequency"] = parts[1] or "-"
+                info["security"] = parts[2] or "-"
+                break
+    return info
 
 
 def connect_wifi(ssid, password, hidden=False):
@@ -113,7 +103,7 @@ def connect_wifi(ssid, password, hidden=False):
 
         # If connection failed, delete the connection profile that was created
         if result.returncode != 0:
-            subprocess.run(["nmcli", "connection", "delete", ssid], capture_output=True, text=True)
+            forget_network(ssid)
 
         return result.returncode == 0, result.stderr or result.stdout
     except Exception as e:
@@ -132,7 +122,9 @@ def connect_802_1x(
     """
     try:
         iface = get_wifi_interface()
-        subprocess.run(["nmcli", "connection", "delete", ssid], capture_output=True)
+        if not iface:
+            return False, "No WiFi interface found"
+        forget_network(ssid)
 
         # Build command based on EAP method
         cmd = [
@@ -177,7 +169,7 @@ def connect_802_1x(
 
         # If connection failed, delete the connection profile that was created
         if result.returncode != 0:
-            subprocess.run(["nmcli", "connection", "delete", ssid], capture_output=True, text=True)
+            forget_network(ssid)
 
         return result.returncode == 0, result.stderr or "Connected"
     except Exception as e:
@@ -198,8 +190,11 @@ def forget_network(ssid):
 def disconnect():
     """Disconnect from network"""
     try:
+        iface = get_wifi_interface()
+        if not iface:
+            return False
         result = subprocess.run(
-            ["nmcli", "device", "disconnect", get_wifi_interface()], capture_output=True, text=True
+            ["nmcli", "device", "disconnect", iface], capture_output=True, text=True
         )
         return result.returncode == 0
     except:
@@ -208,89 +203,52 @@ def disconnect():
 
 def wifi_enabled():
     """Check if WiFi is enabled"""
-    if HAS_DBUS:
-        try:
-            bus = dbus.SystemBus()
-            nm = bus.get_object("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager")
-            props = dbus.Interface(nm, "org.freedesktop.DBus.Properties")
-            sw = bool(props.Get("org.freedesktop.NetworkManager", "WirelessEnabled"))
-            hw = bool(props.Get("org.freedesktop.NetworkManager", "WirelessHardwareEnabled"))
-            return sw and hw
-        except Exception:
-            pass
-
     try:
-        result = subprocess.run(["nmcli", "radio", "wifi"], capture_output=True, text=True)
+        result = subprocess.run(
+            ["nmcli", "radio", "wifi"], capture_output=True, text=True, check=True
+        )
         return result.stdout.strip() == "enabled"
-    except:
-        return True
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return False
 
 
 def toggle_wifi():
-    """Toggle WiFi on/off"""
-    if HAS_DBUS:
-        try:
-            bus = dbus.SystemBus()
-            nm = bus.get_object("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager")
-            props = dbus.Interface(nm, "org.freedesktop.DBus.Properties")
-            current = bool(props.Get("org.freedesktop.NetworkManager", "WirelessEnabled"))
-            props.Set("org.freedesktop.NetworkManager", "WirelessEnabled", not current)
-            return not current
-        except Exception as e:
-            with open("/tmp/gazelle_debug.log", "a") as f:
-                f.write(f"WiFi Toggle DBus Error: {e}\n")
+    """Toggle WiFi on/off."""
+    enabled = wifi_enabled()
 
     try:
-        enabled = wifi_enabled()
-        subprocess.run(["nmcli", "radio", "wifi", "off" if enabled else "on"])
-        return not enabled
-    except:
-        return wifi_enabled()
+        subprocess.run(
+            ["nmcli", "radio", "wifi", "off" if enabled else "on"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return enabled
+
+    return not enabled
 
 
-def wwan_enabled():
+def wwan_enabled() -> bool:
     """Check if WWAN is enabled"""
-    if HAS_DBUS:
-        try:
-            bus = dbus.SystemBus()
-            nm = bus.get_object("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager")
-            props = dbus.Interface(nm, "org.freedesktop.DBus.Properties")
-            sw = bool(props.Get("org.freedesktop.NetworkManager", "WwanEnabled"))
-            hw = bool(props.Get("org.freedesktop.NetworkManager", "WwanHardwareEnabled"))
-            return sw and hw
-        except Exception:
-            pass
-
     try:
         result = subprocess.run(["nmcli", "radio", "wwan"], capture_output=True, text=True)
         return result.stdout.strip() == "enabled"
-    except:
-        return True
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return False
 
 
-def toggle_wwan():
+def toggle_wwan() -> bool:
     """Toggle WWAN on/off"""
-    if HAS_DBUS:
-        try:
-            bus = dbus.SystemBus()
-            nm = bus.get_object("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager")
-            props = dbus.Interface(nm, "org.freedesktop.DBus.Properties")
-            current = bool(props.Get("org.freedesktop.NetworkManager", "WwanEnabled"))
-            props.Set("org.freedesktop.NetworkManager", "WwanEnabled", not current)
-            return not current
-        except Exception as e:
-            with open("/tmp/gazelle_debug.log", "a") as f:
-                f.write(f"WWAN Toggle DBus Error: {e}\n")
-
+    enabled = wwan_enabled()
     try:
-        enabled = wwan_enabled()
         subprocess.run(["nmcli", "radio", "wwan", "off" if enabled else "on"])
         return not enabled
-    except:
-        return wwan_enabled()
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return False
 
 
-def get_ethernet_interface():
+def get_ethernet_interface() -> str | None:
     """Auto-detect Ethernet interface"""
     try:
         result = subprocess.run(
@@ -300,10 +258,11 @@ def get_ethernet_interface():
             check=True,
         )
         for line in result.stdout.strip().split("\n"):
-            if ":ethernet" in line:
-                return line.split(":")[0]
-    except:
-        pass
+            for device, type in line.split(":"):
+                if type == "ethernet":
+                    return device
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None
     return None
 
 
@@ -319,7 +278,7 @@ def connect_802_1x_wired(con_name, username, password, eap_method="peap", phase2
         if not iface:
             return False, "No Ethernet interface found"
 
-        subprocess.run(["nmcli", "connection", "delete", con_name], capture_output=True)
+        forget_network(con_name)
 
         # Build command for wired 802.1X
         cmd = [
@@ -356,9 +315,7 @@ def connect_802_1x_wired(con_name, username, password, eap_method="peap", phase2
 
         # If connection failed, delete the connection profile that was created
         if result.returncode != 0:
-            subprocess.run(
-                ["nmcli", "connection", "delete", con_name], capture_output=True, text=True
-            )
+            forget_network(con_name)
 
         return result.returncode == 0, result.stderr or "Connected"
     except Exception as e:
@@ -435,7 +392,7 @@ def get_active_vpn():
         return None
 
 
-def connect_vpn(name):
+def connect_vpn(name) -> tuple[bool, str]:
     """Connect to VPN by name"""
     try:
         result = subprocess.run(["nmcli", "connection", "up", name], capture_output=True, text=True)
@@ -444,7 +401,7 @@ def connect_vpn(name):
         return False, str(e)
 
 
-def disconnect_vpn(name):
+def disconnect_vpn(name) -> bool:
     """Disconnect VPN by name"""
     try:
         result = subprocess.run(
@@ -455,7 +412,7 @@ def disconnect_vpn(name):
         return False
 
 
-def get_modem_info():
+def get_modem_info() -> dict[str, str] | None:
     """Get modem information via ModemManager"""
     try:
         # Get modem list
@@ -501,7 +458,7 @@ def get_modem_info():
         return None
 
 
-def get_wwan_list():
+def get_wwan_list() -> list[dict[str, str]]:
     """Get all WWAN (cellular) connections configured in NetworkManager"""
     try:
         result = subprocess.run(
@@ -536,7 +493,7 @@ def get_wwan_list():
         return []
 
 
-def get_active_wwan():
+def get_active_wwan() -> str | None:
     """Get currently active WWAN connection name"""
     try:
         result = subprocess.run(
@@ -554,7 +511,7 @@ def get_active_wwan():
         return None
 
 
-def connect_wwan(name):
+def connect_wwan(name) -> tuple[bool, str]:
     """Connect to WWAN by name"""
     try:
         result = subprocess.run(["nmcli", "connection", "up", name], capture_output=True, text=True)
@@ -563,7 +520,7 @@ def connect_wwan(name):
         return False, str(e)
 
 
-def disconnect_wwan(name):
+def disconnect_wwan(name) -> bool:
     """Disconnect WWAN by name"""
     try:
         result = subprocess.run(
