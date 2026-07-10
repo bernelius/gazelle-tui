@@ -17,7 +17,8 @@ try:
     import tomllib  # Python 3.11+
 except ImportError:
     try:
-        import tomli as tomllib  # Fallback for older Python
+        import tomli as tomllib  # Fallback for older Python  #pyright: ignore[reportMissingImports]
+
     except ImportError:
         tomllib = None  # Will use fallback colors
 
@@ -714,7 +715,7 @@ VALID_BORDER_STYLES = {
 }
 
 
-def load_user_styles(config_dir: Path, omarchy_styles: dict = None):
+def load_user_styles(config_dir: Path, omarchy_styles: dict | None = None):
     """
     Load TUI style overrides from user theme file.
     Returns dict with style values merged over defaults.
@@ -975,17 +976,17 @@ class Gazelle(App):
         except Exception:
             self.theme = "textual-dark"
 
-        self.query_one("#dev").add_columns("Name", "Mode", "Powered", "Address")
-        self.query_one("#dev").cursor_type = "none"
-        self.query_one("#dev").can_focus = False
-        self.query_one("#sta").add_columns("State", "Frequency", "Security")
-        self.query_one("#sta").cursor_type = "none"
-        self.query_one("#sta").can_focus = False
-        self.query_one("#known").add_columns("Name", "Security", "Signal")
-        self.query_one("#new").add_columns("Name", "Security", "Signal")
+        self.query_one("#dev", DataTable).add_columns("Name", "Mode", "Powered", "Address")
+        self.query_one("#dev", DataTable).cursor_type = "none"
+        self.query_one("#dev", DataTable).can_focus = False
+        self.query_one("#sta", DataTable).add_columns("State", "Frequency", "Security")
+        self.query_one("#sta", DataTable).cursor_type = "none"
+        self.query_one("#sta", DataTable).can_focus = False
+        self.query_one("#known", DataTable).add_columns("Name", "Security", "Signal")
+        self.query_one("#new", DataTable).add_columns("Name", "Security", "Signal")
 
         # Show placeholder while scanning
-        new_table = self.query_one("#new")
+        new_table = self.query_one("#new", DataTable)
         new_table.add_row("Scanning for networks...", "", "")
 
         # Trigger async network scan
@@ -1065,7 +1066,7 @@ class Gazelle(App):
         avail = {n["ssid"]: n for n in networks}
 
         # Device
-        t = self.query_one("#dev")
+        t = self.query_one("#dev", DataTable)
         t.clear()
         iface = get_wifi_interface()
         try:
@@ -1099,13 +1100,13 @@ class Gazelle(App):
             pass
 
         # Station
-        t = self.query_one("#sta")
+        t = self.query_one("#sta", DataTable)
         t.clear()
         i = get_station_info()
         t.add_row(i["state"], i["frequency"], i["security"])
 
         # Known (only show networks that are in range)
-        t = self.query_one("#known")
+        t = self.query_one("#known", DataTable)
         t.clear()
         known_ssids = set()
         try:
@@ -1135,7 +1136,7 @@ class Gazelle(App):
             pass
 
         # New (exclude networks that are already known)
-        t = self.query_one("#new")
+        t = self.query_one("#new", DataTable)
         t.clear()
         for n in networks:
             if n["ssid"] not in known_ssids:
@@ -1149,10 +1150,10 @@ class Gazelle(App):
                     sec = "-"
                 t.add_row(n["ssid"], sec, f"{n['signal']}%")
 
-    def _get_focused_table(self):
+    def _get_focused_table(self) -> DataTable:
         """Get the currently focused table"""
-        known = self.query_one("#known")
-        new = self.query_one("#new")
+        known = self.query_one("#known", DataTable)
+        new = self.query_one("#new", DataTable)
         if known.has_focus:
             return known
         else:
@@ -1277,7 +1278,7 @@ class Gazelle(App):
 
     def action_forget(self) -> None:
         """Remove selected known network"""
-        known = self.query_one("#known")
+        known = self.query_one("#known", DataTable)
         if not known.has_focus or known.row_count == 0:
             return
         if known.cursor_row < 0 or known.cursor_row >= known.row_count:
@@ -1296,9 +1297,6 @@ class Gazelle(App):
 
     def action_toggle_wwan_radio(self) -> None:
         try:
-            with open("/tmp/gazelle_debug.log", "a") as f:
-                f.write(f"Action Toggle WWAN Triggered. HAS_DBUS: {HAS_DBUS}\n")
-
             result = toggle_wwan()
             msg = "ON" if result else "OFF"
 
