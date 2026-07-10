@@ -2,6 +2,15 @@
 
 import subprocess
 
+VPN_TYPES = {
+    "vpn",
+    "wireguard",
+    "vpnc",
+    "pptp",
+    "openconnect",
+    "openvpn",
+}
+
 
 def get_wifi_interface() -> str | None:
     try:
@@ -22,34 +31,64 @@ def get_wifi_interface() -> str | None:
     return None
 
 
-def get_wifi_list():
-    """Get available WiFi networks"""
-    try:
-        result = subprocess.run(
-            ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "device", "wifi", "list"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+def get_wifi_list(force_rescan=False):
+    """Get available WiFi networks.
 
-        networks, seen = [], set()
-        for line in result.stdout.strip().split("\n"):
-            if not line:
-                continue
-            parts = line.split(":")
-            if len(parts) >= 4 and parts[0] and parts[0] not in seen:
-                seen.add(parts[0])
-                networks.append(
-                    {
-                        "ssid": parts[0],
-                        "signal": int(parts[1]) if parts[1] else 0,
-                        "security": parts[2],
-                        "connected": parts[3] == "*",
-                    }
+    Args:
+        force_rescan: If True, request a fresh scan. Newer NetworkManager
+            supports ``--rescan yes`` which blocks until the scan completes;
+            older versions fall back to ``nmcli device wifi rescan`` followed
+            by a plain list.
+    """
+    list_cmd = ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "device", "wifi", "list"]
+    try:
+        if force_rescan:
+            try:
+                result = subprocess.run(
+                    list_cmd + ["--rescan", "yes"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
                 )
-        return sorted(networks, key=lambda x: x["signal"], reverse=True)
-    except:
+            except subprocess.CalledProcessError:
+                # Older nmcli without --rescan support: trigger a rescan and
+                # fall back to a plain list.
+                subprocess.run(
+                    ["nmcli", "device", "wifi", "rescan"],
+                    capture_output=True,
+                )
+                result = subprocess.run(
+                    list_cmd,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+        else:
+            result = subprocess.run(
+                list_cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return []
+
+    networks, seen = [], set()
+    for line in result.stdout.strip().split("\n"):
+        if not line:
+            continue
+        parts = line.split(":")
+        if len(parts) >= 4 and parts[0] and parts[0] not in seen:
+            seen.add(parts[0])
+            networks.append(
+                {
+                    "ssid": parts[0],
+                    "signal": int(parts[1]) if parts[1] else 0,
+                    "security": parts[2],
+                    "connected": parts[3] == "*",
+                }
+            )
+    return sorted(networks, key=lambda x: x["signal"], reverse=True)
 
 
 def get_current_connection():
@@ -336,18 +375,18 @@ def disconnect_ethernet():
         return False
 
 
-def is_enterprise(security):
+def is_enterprise(security) -> bool:
     """Check if network is 802.1X"""
     return "WPA-EAP" in security or "802.1X" in security
 
 
-def is_owe(security):
+def is_owe(security) -> bool:
     """Check if network uses OWE (Enhanced Open / WPA3-OWE)"""
     return "OWE" in security or "WPA3-OWE" in security
 
 
-def get_vpn_list():
-    """Get all VPN connections configured in NetworkManager"""
+def get_vpn_list() -> list[dict[str, str]]:
+    """Return configured VPN connections from NetworkManager."""
     try:
         result = subprocess.run(
             ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
@@ -355,23 +394,35 @@ def get_vpn_list():
             text=True,
             check=True,
         )
-        active_vpn = get_active_vpn()
-        vpns = []
-
-        # VPN types supported by NetworkManager
-        vpn_types = [":vpn", ":wireguard", ":vpnc", ":pptp", ":openconnect", ":openvpn"]
-
-        for line in result.stdout.strip().split("\n"):
-            # Check if line contains any VPN type
-            if any(vpn_type in line for vpn_type in vpn_types):
-                name = line.split(":")[0]
-                vpns.append({"name": name, "active": name == active_vpn})
-        return sorted(vpns, key=lambda x: (not x["active"], x["name"]))
-    except:
+    except subprocess.SubprocessError:
         return []
 
+    active_vpn = get_active_vpn()
+    vpns = []
 
-def get_active_vpn():
+    for line in result.stdout.splitlines():
+        if not line:
+            continue
+
+        try:
+            name, conn_type = line.rsplit(":", 1)
+        except ValueError:
+            continue
+
+        if conn_type not in VPN_TYPES:
+            continue
+
+        vpns.append(
+            {
+                "name": name,
+                "active": name == active_vpn,
+            }
+        )
+
+    return sorted(vpns, key=lambda vpn: (not vpn["active"], vpn["name"]))
+
+
+def get_active_vpn() -> str | None:
     """Get currently active VPN connection name"""
     try:
         result = subprocess.run(

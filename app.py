@@ -1051,14 +1051,19 @@ class Gazelle(App):
     async def scan_networks_async(self) -> None:
         """Async WiFi network scanning in background"""
         try:
-            # Run blocking get_wifi_list() in background thread
-            await asyncio.to_thread(get_wifi_list)
+            # Run blocking scan/list in background thread
+            networks = await asyncio.to_thread(get_wifi_list, force_rescan=True)
             # Update UI with results
-            self.refresh_all()
+            self.refresh_all(networks=networks)
         except Exception as e:
             self.notify(f"Scan failed: {str(e)}")
 
-    def refresh_all(self) -> None:
+    def refresh_all(self, networks=None, force_rescan=False) -> None:
+        # Fetch network list once if not provided
+        if networks is None:
+            networks = get_wifi_list(force_rescan=force_rescan)
+        avail = {n["ssid"]: n for n in networks}
+
         # Device
         t = self.query_one("#dev")
         t.clear()
@@ -1109,7 +1114,6 @@ class Gazelle(App):
                 capture_output=True,
                 text=True,
             )
-            avail = {n["ssid"]: n for n in get_wifi_list()}
             for line in r.stdout.strip().split("\n"):
                 if ":802-11-wireless" in line or ":wifi" in line:
                     name = line.split(":")[0]
@@ -1133,7 +1137,7 @@ class Gazelle(App):
         # New (exclude networks that are already known)
         t = self.query_one("#new")
         t.clear()
-        for n in get_wifi_list():
+        for n in networks:
             if n["ssid"] not in known_ssids:
                 if is_enterprise(n["security"]):
                     sec = "802.1x"
@@ -1201,7 +1205,6 @@ class Gazelle(App):
 
     def action_scan(self) -> None:
         self.notify("Scanning...")
-        subprocess.run(["nmcli", "device", "wifi", "rescan"], capture_output=True)
         self.run_worker(self.scan_networks_async, exclusive=True)
 
     def action_select(self) -> None:
