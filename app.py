@@ -8,10 +8,19 @@ from textual.screen import ModalScreen
 from textual.binding import Binding
 from textual.reactive import reactive
 from network import *
+from network import _parse_wifi_list
 import subprocess
 import asyncio
 import json
 from pathlib import Path
+from functools import partial
+
+# Launch scan tuning: request a rescan, then poll the plain list every
+# SCAN_POLL_INTERVAL seconds. Stop early once the list is stable, but only
+# after SCAN_MIN_POLLS polls so we don't trust the stale pre-scan cache.
+SCAN_POLL_INTERVAL = 0.5
+SCAN_MIN_POLLS = 5
+SCAN_MAX_POLLS = 20
 
 try:
     import tomllib  # Python 3.11+
@@ -987,16 +996,30 @@ class Gazelle(App):
         self.query_one("#known", DataTable).add_columns("Name", "Security", "Signal")
         self.query_one("#new", DataTable).add_columns("Name", "Security", "Signal")
 
-        # Show placeholder while scanning
-        new_table = self.query_one("#new", DataTable)
-        new_table.add_row("Scanning for networks...", "", "")
+        # Track any running async scan subprocess so we can kill it on quit.
+        self._scan_process = None
 
-        # Trigger async network scan
-        self.run_worker(self.scan_networks_async, exclusive=True)
+        # Show cached network list immediately
+        initial_networks = get_wifi_list(force_rescan=False)
+        if initial_networks:
+            self.refresh_all(networks=initial_networks)
+        else:
+            # Show placeholder while background rescan runs
+            new_table = self.query_one("#new", DataTable)
+            new_table.add_row("Scanning for networks...", "", "")
+
+        # Trigger async rescan in background; refresh on every changed poll.
+        self.run_worker(partial(self.scan_networks_async, initial_networks), exclusive=True)
 
         self.query_one("#new").focus()
         self.active_section = "new"
         self.update_info_sections_visibility()
+
+    def on_unmount(self) -> None:
+        """Kill any in-flight scan subprocess on quit."""
+        self.workers.cancel_all()
+        if self._scan_process is not None and self._scan_process.returncode is None:
+            self._scan_process.kill()
 
     def update_info_sections_visibility(self) -> None:
         """Hide Device/Station sections when the viewport is too short."""
@@ -1051,13 +1074,86 @@ class Gazelle(App):
         self.save_config(config)
         self.log.info(f"Theme changed to: {new_theme}")
 
-    async def scan_networks_async(self) -> None:
-        """Async WiFi network scanning in background"""
+    def _request_rescan(self) -> None:
+        """Ask NetworkManager to scan. Ignore errors (e.g. scan already in progress)."""
         try:
-            # Run blocking scan/list in background thread
-            networks = await asyncio.to_thread(get_wifi_list, force_rescan=True)
-            # Update UI with results
-            self.refresh_all(networks=networks)
+            subprocess.run(
+                ["nmcli", "device", "wifi", "rescan"],
+                capture_output=True,
+            )
+        except Exception:
+            pass
+
+    async def _list_wifi_async(self) -> list:
+        """Run a cancellable plain ``nmcli device wifi list``.
+
+        Returns:
+            Parsed list of network dicts.
+        """
+        proc = await asyncio.create_subprocess_exec(
+            "nmcli",
+            "-t",
+            "--colors",
+            "no",
+            "-f",
+            "SSID,SIGNAL,SECURITY,IN-USE",
+            "device",
+            "wifi",
+            "list",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,
+        )
+        self._scan_process = proc
+        try:
+            stdout, _ = await proc.communicate()
+        except asyncio.CancelledError:
+            if proc.returncode is None:
+                proc.kill()
+            raise
+        finally:
+            self._scan_process = None
+
+        if proc.returncode != 0:
+            return []
+
+        return _parse_wifi_list(stdout.decode())
+
+    async def scan_networks_async(self, baseline_networks=None) -> None:
+        """Async WiFi network scanning in background.
+
+        Fires ``nmcli device wifi rescan`` once, then polls the plain list and
+        refreshes the UI whenever it changes. Stops early when the list has
+        been stable for two consecutive polls, but only after SCAN_MIN_POLLS
+        so we don't trust the stale pre-scan cache.
+        """
+        try:
+            self._request_rescan()
+
+            previous = None
+            unchanged = 0
+            for i in range(SCAN_MAX_POLLS):
+                await asyncio.sleep(SCAN_POLL_INTERVAL)
+                networks = await self._list_wifi_async()
+
+                if previous is None:
+                    # First poll: refresh if the baseline was empty or if the
+                    # list already changed. This also removes the placeholder.
+                    if not baseline_networks or networks != baseline_networks:
+                        self.refresh_all(networks=networks)
+                    unchanged = 0
+                elif networks != previous:
+                    self.refresh_all(networks=networks)
+                    unchanged = 0
+                else:
+                    unchanged += 1
+                    if i >= SCAN_MIN_POLLS and unchanged >= 4:
+                        break
+
+                previous = networks
+
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             self.notify(f"Scan failed: {str(e)}")
 
@@ -1070,8 +1166,8 @@ class Gazelle(App):
         iface = get_wifi_interface()
 
         # Device
-        t = self.query_one("#dev", DataTable)
-        t.clear()
+        device_table = self.query_one("#dev", DataTable)
+        device_table.clear()
         try:
             mac = subprocess.run(
                 ["cat", f"/sys/class/net/{iface}/address"],
@@ -1080,68 +1176,68 @@ class Gazelle(App):
             ).stdout.strip()
         except:
             mac = "-"
-        t.add_row(iface, "station", "On" if wifi_enabled() else "Off", mac)
+        device_table.add_row(iface, "station", "On" if wifi_enabled() else "Off", mac)
 
         # Add WWAN status if wwan device exists
         try:
             # Use nmcli to detect if any gsm/wwan device exists
-            r = subprocess.run(
+            result = subprocess.run(
                 ["nmcli", "-t", "-f", "DEVICE,TYPE", "device"],
                 capture_output=True,
                 text=True,
             )
             wwan_iface = None
-            for line in r.stdout.strip().split("\n"):
+            for line in result.stdout.strip().split("\n"):
                 if ":gsm" in line:
                     wwan_iface = line.split(":")[0]
                     break
 
             if wwan_iface:
                 # Try to get MAC or IMEI? Just show iface for now
-                t.add_row(wwan_iface, "wwan", "On" if wwan_enabled() else "Off", "-")
+                device_table.add_row(wwan_iface, "wwan", "On" if wwan_enabled() else "Off", "-")
         except:
             pass
 
         # Station
-        t = self.query_one("#sta")
-        t.clear()
-        i = get_station_info()
-        ipv4 = get_device_ipv4(iface) if i["state"] == "connected" else "-"
-        t.add_row(i["state"], i["frequency"], i["security"], ipv4)
+        station_table = self.query_one("#sta", DataTable)
+        station_table.clear()
+        info = get_station_info()
+        ipv4 = get_device_ipv4(iface) if info["state"] == "connected" else "-"
+        station_table.add_row(info["state"], info["frequency"], info["security"], ipv4)
 
         # Known (only show networks that are in range)
-        t = self.query_one("#known", DataTable)
-        t.clear()
+        known_table = self.query_one("#known", DataTable)
+        known_table.clear()
         known_ssids = set()
         try:
-            r = subprocess.run(
+            result = subprocess.run(
                 ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
                 capture_output=True,
                 text=True,
             )
-            for line in r.stdout.strip().split("\n"):
+            for line in result.stdout.strip().split("\n"):
                 if ":802-11-wireless" in line or ":wifi" in line:
                     name = line.split(":")[0]
                     known_ssids.add(name)
                     # Only show if network is in range
                     if name in avail:
-                        s = avail[name]["security"]
-                        if is_enterprise(s):
+                        security = avail[name]["security"]
+                        if is_enterprise(security):
                             sec = "802.1x"
-                        elif is_owe(s):
+                        elif is_owe(security):
                             sec = "owe"
-                        elif s:
+                        elif security:
                             sec = "psk"
                         else:
                             sec = "-"
                         sig = f"{avail[name]['signal']}%"
-                        t.add_row(name, sec, sig)
+                        known_table.add_row(name, sec, sig)
         except:
             pass
 
         # New (exclude networks that are already known)
-        t = self.query_one("#new", DataTable)
-        t.clear()
+        new_table = self.query_one("#new", DataTable)
+        new_table.clear()
         for n in networks:
             if n["ssid"] not in known_ssids:
                 if is_enterprise(n["security"]):
@@ -1152,7 +1248,7 @@ class Gazelle(App):
                     sec = "psk"
                 else:
                     sec = "-"
-                t.add_row(n["ssid"], sec, f"{n['signal']}%")
+                new_table.add_row(n["ssid"], sec, f"{n['signal']}%")
 
     def _get_focused_table(self) -> DataTable:
         """Get the currently focused table"""

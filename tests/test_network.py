@@ -27,7 +27,17 @@ class TestGetWifiList:
         assert result[3]["ssid"] == "EnterpriseNet"
 
         mock_run.assert_called_once_with(
-            ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "device", "wifi", "list"],
+            [
+                "nmcli",
+                "-t",
+                "--colors",
+                "no",
+                "-f",
+                "SSID,SIGNAL,SECURITY,IN-USE",
+                "device",
+                "wifi",
+                "list",
+            ],
             capture_output=True,
             text=True,
             check=True,
@@ -55,6 +65,8 @@ class TestGetWifiList:
             [
                 "nmcli",
                 "-t",
+                "--colors",
+                "no",
                 "-f",
                 "SSID,SIGNAL,SECURITY,IN-USE",
                 "device",
@@ -86,6 +98,8 @@ class TestGetWifiList:
             [
                 "nmcli",
                 "-t",
+                "--colors",
+                "no",
                 "-f",
                 "SSID,SIGNAL,SECURITY,IN-USE",
                 "device",
@@ -103,7 +117,17 @@ class TestGetWifiList:
             capture_output=True,
         )
         assert mock_run.call_args_list[2] == call(
-            ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "device", "wifi", "list"],
+            [
+                "nmcli",
+                "-t",
+                "--colors",
+                "no",
+                "-f",
+                "SSID,SIGNAL,SECURITY,IN-USE",
+                "device",
+                "wifi",
+                "list",
+            ],
             capture_output=True,
             text=True,
             check=True,

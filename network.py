@@ -31,6 +31,33 @@ def get_wifi_interface() -> str | None:
     return None
 
 
+def _parse_wifi_list(stdout: str) -> list:
+    """Parse the tabular output of ``nmcli device wifi list``.
+
+    Args:
+        stdout: Raw command output.
+
+    Returns:
+        List of network dicts sorted by signal strength.
+    """
+    networks, seen = [], set()
+    for line in stdout.strip().split("\n"):
+        if not line:
+            continue
+        parts = line.split(":")
+        if len(parts) >= 4 and parts[0] and parts[0] not in seen:
+            seen.add(parts[0])
+            networks.append(
+                {
+                    "ssid": parts[0],
+                    "signal": int(parts[1]) if parts[1] else 0,
+                    "security": parts[2],
+                    "connected": parts[3] == "*",
+                }
+            )
+    return sorted(networks, key=lambda x: x["signal"], reverse=True)
+
+
 def get_wifi_list(force_rescan=False):
     """Get available WiFi networks.
 
@@ -40,7 +67,17 @@ def get_wifi_list(force_rescan=False):
             older versions fall back to ``nmcli device wifi rescan`` followed
             by a plain list.
     """
-    list_cmd = ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "device", "wifi", "list"]
+    list_cmd = [
+        "nmcli",
+        "-t",
+        "--colors",
+        "no",
+        "-f",
+        "SSID,SIGNAL,SECURITY,IN-USE",
+        "device",
+        "wifi",
+        "list",
+    ]
     try:
         if force_rescan:
             try:
@@ -73,22 +110,7 @@ def get_wifi_list(force_rescan=False):
     except (subprocess.CalledProcessError, FileNotFoundError):
         return []
 
-    networks, seen = [], set()
-    for line in result.stdout.strip().split("\n"):
-        if not line:
-            continue
-        parts = line.split(":")
-        if len(parts) >= 4 and parts[0] and parts[0] not in seen:
-            seen.add(parts[0])
-            networks.append(
-                {
-                    "ssid": parts[0],
-                    "signal": int(parts[1]) if parts[1] else 0,
-                    "security": parts[2],
-                    "connected": parts[3] == "*",
-                }
-            )
-    return sorted(networks, key=lambda x: x["signal"], reverse=True)
+    return _parse_wifi_list(result.stdout)
 
 
 def get_current_connection():
@@ -115,7 +137,17 @@ def get_station_info():
     current = get_current_connection()
     if current:
         result = subprocess.run(
-            ["nmcli", "-t", "-f", "ACTIVE,FREQ,SECURITY", "device", "wifi", "list"],
+            [
+                "nmcli",
+                "-t",
+                "--colors",
+                "no",
+                "-f",
+                "ACTIVE,FREQ,SECURITY",
+                "device",
+                "wifi",
+                "list",
+            ],
             capture_output=True,
             text=True,
         )
