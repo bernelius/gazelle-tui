@@ -17,6 +17,12 @@ DIFFERENT = [
 ]
 
 
+@pytest.fixture(autouse=True)
+def fast_scan_interval(monkeypatch):
+    """Speed up scan tests by shrinking the polling delay."""
+    monkeypatch.setattr("app.SCAN_POLL_INTERVAL", 0.01)
+
+
 def _make_app(monkeypatch, tmp_path, initial_networks):
     """Build a Gazelle app with network/table helpers mocked for scan tests."""
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -119,17 +125,17 @@ def test_scan_networks_async_skips_first_refresh_when_baseline_unchanged(monkeyp
 
 def test_scan_networks_async_stops_when_stable_after_min_polls(monkeypatch, tmp_path):
     app, _ = _make_app(monkeypatch, tmp_path, BASELINE)
-    # Change on the second poll, then stable; should stop after two stable polls
-    # once SCAN_MIN_POLLS has passed.
-    poll1 = BASELINE
-    poll2 = DIFFERENT
-    poll3 = DIFFERENT
-    poll4 = DIFFERENT
-    app._list_wifi_async = MagicMock(side_effect=_async_sequence([poll1, poll2, poll3, poll4]))
+    from app import SCAN_MIN_POLLS, SCAN_REPEATS
+
+    # Change on the second poll, then stable; should stop once SCAN_MIN_POLLS
+    # has passed and SCAN_REPEATS consecutive unchanged polls are seen.
+    expected_calls = max(SCAN_MIN_POLLS, SCAN_REPEATS + 1) + 1
+    polls = [BASELINE, DIFFERENT] + [DIFFERENT] * SCAN_REPEATS
+    app._list_wifi_async = MagicMock(side_effect=_async_sequence(polls))
     asyncio.run(app.scan_networks_async(BASELINE))
     assert app.refresh_all.call_count == 1
     app.refresh_all.assert_called_once_with(networks=DIFFERENT)
-    assert app._list_wifi_async.call_count == 4
+    assert app._list_wifi_async.call_count == expected_calls
 
 
 def test_scan_networks_async_respects_max_polls(monkeypatch, tmp_path):

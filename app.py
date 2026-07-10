@@ -21,6 +21,7 @@ from functools import partial
 SCAN_POLL_INTERVAL = 0.5
 SCAN_MIN_POLLS = 5
 SCAN_MAX_POLLS = 20
+SCAN_REPEATS = 4
 
 try:
     import tomllib  # Python 3.11+
@@ -790,8 +791,19 @@ def build_css(styles: dict) -> str:
         color: $foreground;
     }}
 
-    DataTable > .datatable--hover {{
-        background: $accent {styles["hover_opacity"]};
+    /* Remove the default focus background tint from all DataTables so the
+       container background doesn't change. */
+    DataTable:focus {{
+        background-tint: transparent;
+    }}
+
+    /* Keep header rows unchanged when DataTables are focused or hovered. */
+    DataTable:focus > .datatable--header {{
+        background-tint: transparent;
+    }}
+
+    DataTable > .datatable--header-hover {{
+        background: transparent;
     }}
     """
 
@@ -1013,6 +1025,8 @@ class Gazelle(App):
 
         self.query_one("#new").focus()
         self.active_section = "new"
+        self.query_one("#known", DataTable).cursor_type = "none"
+        self.query_one("#new", DataTable).cursor_type = "row"
         self.update_info_sections_visibility()
 
     def on_unmount(self) -> None:
@@ -1147,7 +1161,7 @@ class Gazelle(App):
                     unchanged = 0
                 else:
                     unchanged += 1
-                    if i >= SCAN_MIN_POLLS and unchanged >= 4:
+                    if i >= SCAN_MIN_POLLS and unchanged >= SCAN_REPEATS:
                         break
 
                 previous = networks
@@ -1286,6 +1300,14 @@ class Gazelle(App):
         """Keep active_section in sync with keyboard or mouse focus changes."""
         if event.control.id in ("known", "new"):
             self.active_section = event.control.id
+            known = self.query_one("#known", DataTable)
+            new = self.query_one("#new", DataTable)
+            if event.control.id == "known":
+                known.cursor_type = "row"
+                new.cursor_type = "none"
+            else:
+                new.cursor_type = "row"
+                known.cursor_type = "none"
 
     def action_switch_section(self) -> None:
         """Toggle focus between Known and New network sections.
@@ -1298,10 +1320,14 @@ class Gazelle(App):
             super().action_focus_next()
             return
         if known.has_focus:
+            known.cursor_type = "none"
             new.focus()
+            new.cursor_type = "row"
             self.active_section = "new"
         else:
+            new.cursor_type = "none"
             known.focus()
+            known.cursor_type = "row"
             self.active_section = "known"
 
     def action_scan(self) -> None:

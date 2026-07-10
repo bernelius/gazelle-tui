@@ -57,6 +57,20 @@ def test_active_section_defaults_to_new_after_mount(gazelle_app):
     assert gazelle_app.active_section == "new"
 
 
+def test_mount_sets_initial_cursor_visibility(gazelle_app):
+    known = MagicMock()
+    new = MagicMock()
+
+    def query_one(selector, *args, **kwargs):
+        return {"#known": known, "#new": new}.get(selector, MagicMock())
+
+    gazelle_app.query_one = query_one
+    gazelle_app.on_mount()
+
+    assert known.cursor_type == "none"
+    assert new.cursor_type == "row"
+
+
 def _build_section_app(gazelle_app, known_focused):
     """Wire up mocked section containers and tables, return them."""
     known_container = MagicMock()
@@ -87,11 +101,13 @@ def _build_section_app(gazelle_app, known_focused):
     known_table.has_focus = known_focused
     known_table.id = "known"
     known_table.focus = MagicMock()
+    known_table.cursor_type = "row" if known_focused else "none"
 
     new_table = MagicMock()
     new_table.has_focus = not known_focused
     new_table.id = "new"
     new_table.focus = MagicMock()
+    new_table.cursor_type = "row" if not known_focused else "none"
 
     def query_one(selector, *args, **kwargs):
         return {
@@ -115,6 +131,8 @@ def test_switch_section_toggles_to_new(gazelle_app):
 
     assert gazelle_app.active_section == "new"
     new_t.focus.assert_called_once()
+    assert known_t.cursor_type == "none"
+    assert new_t.cursor_type == "row"
     assert "active-section" in new_c.classes
     assert "active-section" not in known_c.classes
 
@@ -127,6 +145,8 @@ def test_switch_section_toggles_back_to_known(gazelle_app):
 
     assert gazelle_app.active_section == "known"
     known_t.focus.assert_called_once()
+    assert new_t.cursor_type == "none"
+    assert known_t.cursor_type == "row"
     assert "active-section" in known_c.classes
     assert "active-section" not in new_c.classes
 
@@ -161,5 +181,7 @@ def test_on_focus_updates_active_section(gazelle_app):
     gazelle_app.on_focus(focus_event)
 
     assert gazelle_app.active_section == "known"
+    assert known_t.cursor_type == "row"
+    assert new_t.cursor_type == "none"
     assert "active-section" in known_c.classes
     assert "active-section" not in new_c.classes
