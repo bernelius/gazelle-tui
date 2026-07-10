@@ -347,6 +347,40 @@ def toggle_wwan() -> bool:
         return False
 
 
+def has_wwan_capabilities() -> bool:
+    """Return True if WWAN modem hardware/software support is available."""
+    # 1. ModemManager running with at least one modem
+    try:
+        result = subprocess.run(
+            ["mmcli", "-L"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0 and "/Modem/" in result.stdout:
+            return True
+    except FileNotFoundError:
+        pass
+
+    # 2. Fallback: NetworkManager sees a cellular device
+    try:
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "DEVICE,TYPE", "device"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        for line in result.stdout.splitlines():
+            if ":" not in line:
+                continue
+            _, dev_type = line.split(":", 1)
+            if dev_type in ("gsm", "cdma", "wimax"):
+                return True
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+
+    return False
+
+
 def get_ethernet_interface() -> str | None:
     """Auto-detect Ethernet interface"""
     try:

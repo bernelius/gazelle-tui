@@ -800,10 +800,12 @@ def build_css(styles: dict) -> str:
     /* Keep header rows unchanged when DataTables are focused or hovered. */
     DataTable:focus > .datatable--header {{
         background-tint: transparent;
+        color: $accent;
     }}
 
     DataTable > .datatable--header-hover {{
         background: transparent;
+        color: $accent;
     }}
     """
 
@@ -902,15 +904,24 @@ class Gazelle(App):
         Binding("space", "select", "Connect"),
         Binding("s", "scan", "Scan"),
         Binding("d", "disconnect", "Disconnect"),
-        Binding("r", "forget", "Forget"),
+        Binding("f", "forget", "Forget"),
         Binding("h", "hidden", "Hidden"),
         Binding("v", "vpn_screen", "VPN"),
-        Binding("w", "wwan_screen", "WWAN"),
-        Binding("ctrl+r", "toggle_wifi", "WiFi"),
-        Binding("ctrl+b", "toggle_wwan_radio", "WWAN Radio"),
+        Binding("m", "wwan_screen", "WWAN"),
+        Binding("ctrl+m", "toggle_wwan_radio", "Toggle WWAN"),
+        Binding("ctrl+w", "toggle_wifi", "Toggle WiFi"),
         Binding("e", "wired_8021x", "802.1X Wired"),
-        Binding("?", "help", "Help"),
     ]
+
+    def __init__(self, *args, **kwargs):
+        # Detect WWAN support once at startup so the footer and key handling
+        # can hide WWAN-specific bindings on systems without cellular hardware.
+        self._has_wwan = has_wwan_capabilities()
+        super().__init__(*args, **kwargs)
+        # Track any running async scan subprocess so we can kill it on quit.
+        # Initialized here (rather than in on_mount) so on_unmount can safely
+        # inspect it even if the app shuts down before/during mount.
+        self._scan_process = None
 
     def compose(self) -> ComposeResult:
         device_container = Container(DataTable(id="dev"), classes="section", id="device-section")
@@ -1007,9 +1018,6 @@ class Gazelle(App):
         self.query_one("#sta", DataTable).can_focus = False
         self.query_one("#known", DataTable).add_columns("Name", "Security", "Signal")
         self.query_one("#new", DataTable).add_columns("Name", "Security", "Signal")
-
-        # Track any running async scan subprocess so we can kill it on quit.
-        self._scan_process = None
 
         # Show cached network list immediately
         initial_networks = get_wifi_list(force_rescan=False)
@@ -1192,25 +1200,9 @@ class Gazelle(App):
             mac = "-"
         device_table.add_row(iface, "station", "On" if wifi_enabled() else "Off", mac)
 
-        # Add WWAN status if wwan device exists
-        try:
-            # Use nmcli to detect if any gsm/wwan device exists
-            result = subprocess.run(
-                ["nmcli", "-t", "-f", "DEVICE,TYPE", "device"],
-                capture_output=True,
-                text=True,
-            )
-            wwan_iface = None
-            for line in result.stdout.strip().split("\n"):
-                if ":gsm" in line:
-                    wwan_iface = line.split(":")[0]
-                    break
-
-            if wwan_iface:
-                # Try to get MAC or IMEI? Just show iface for now
-                device_table.add_row(wwan_iface, "wwan", "On" if wwan_enabled() else "Off", "-")
-        except:
-            pass
+        # Add WWAN status if the system has WWAN capability
+        if has_wwan_capabilities():
+            device_table.add_row("wwan", "wwan", "On" if wwan_enabled() else "Off", "-")
 
         # Station
         station_table = self.query_one("#sta", DataTable)
@@ -1418,8 +1410,12 @@ class Gazelle(App):
         self.refresh_all()
 
     def action_toggle_wifi(self) -> None:
-        self.notify(f"WiFi {'ON' if toggle_wifi() else 'OFF'}")
-        self.set_timer(1, self.refresh_all)
+        enabled = toggle_wifi()
+        self.notify(f"WiFi {'ON' if enabled else 'OFF'}")
+        if enabled:
+            self.action_scan()
+        else:
+            self.set_timer(1, self.refresh_all)
 
     def action_toggle_wwan_radio(self) -> None:
         try:
@@ -1466,8 +1462,8 @@ class Gazelle(App):
         self.notify("✓ Connected" if ok else f"✗ {msg}")
         self.refresh_all()
 
-    def action_help(self) -> None:
-        self.notify(
-            "j/k:Move Tab:Switch Space:Connect s:Scan h:Hidden v:VPN e:802.1X Wired d:Disconnect r:Forget q:Quit",
-            timeout=5,
-        )
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        """Hide WWAN bindings when no WWAN capability is available."""
+        if action in ("wwan_screen", "toggle_wwan_radio") and not self._has_wwan:
+            return False
+        return True

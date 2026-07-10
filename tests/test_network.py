@@ -3,7 +3,7 @@
 import subprocess
 from unittest.mock import MagicMock, call, patch
 
-from network import get_device_ipv4, get_ethernet_interface, get_wifi_list
+from network import get_device_ipv4, get_ethernet_interface, get_wifi_list, has_wwan_capabilities
 
 
 class TestGetWifiList:
@@ -229,3 +229,80 @@ class TestGetEthernetInterface:
             result = get_ethernet_interface()
 
         assert result is None
+
+
+class TestHasWwanCapabilities:
+    """Unit tests for has_wwan_capabilities."""
+
+    def test_true_when_mmcli_lists_modem(self):
+        def side_effect(cmd, **kwargs):
+            if cmd[0] == "mmcli":
+                return MagicMock(
+                    stdout="/org/freedesktop/ModemManager1/Modem/0 [X20]",
+                    returncode=0,
+                )
+            return MagicMock(stdout="wlan0:wifi\n", returncode=0)
+
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.side_effect = side_effect
+            result = has_wwan_capabilities()
+
+        assert result is True
+
+    def test_true_when_mmcli_missing_but_nmcli_has_gsm(self):
+        def side_effect(cmd, **kwargs):
+            if cmd[0] == "mmcli":
+                raise FileNotFoundError("mmcli not found")
+            return MagicMock(stdout="wlan0:wifi\nwwan0:gsm\n", returncode=0)
+
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.side_effect = side_effect
+            result = has_wwan_capabilities()
+
+        assert result is True
+
+    def test_true_when_mmcli_errors_but_nmcli_has_cdma(self):
+        def side_effect(cmd, **kwargs):
+            if cmd[0] == "mmcli":
+                return MagicMock(
+                    stdout="error: couldn't find the ModemManager process",
+                    returncode=1,
+                )
+            return MagicMock(stdout="wwan0:cdma\n", returncode=0)
+
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.side_effect = side_effect
+            result = has_wwan_capabilities()
+
+        assert result is True
+
+    def test_false_when_no_modems_and_no_cellular_device(self):
+        def side_effect(cmd, **kwargs):
+            if cmd[0] == "mmcli":
+                return MagicMock(stdout="No modems were found\n", returncode=0)
+            return MagicMock(stdout="wlan0:wifi\neth0:ethernet\n", returncode=0)
+
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.side_effect = side_effect
+            result = has_wwan_capabilities()
+
+        assert result is False
+
+    def test_false_when_mmcli_missing_and_nmcli_fails(self):
+        def side_effect(cmd, **kwargs):
+            if cmd[0] == "mmcli":
+                raise FileNotFoundError("mmcli not found")
+            raise subprocess.CalledProcessError(1, "nmcli")
+
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.side_effect = side_effect
+            result = has_wwan_capabilities()
+
+        assert result is False
+
+    def test_false_when_both_missing(self):
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError("mmcli not found")
+            result = has_wwan_capabilities()
+
+        assert result is False

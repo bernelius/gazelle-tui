@@ -23,9 +23,11 @@ def fast_scan_interval(monkeypatch):
     monkeypatch.setattr("app.SCAN_POLL_INTERVAL", 0.01)
 
 
-def _make_app(monkeypatch, tmp_path, initial_networks):
+def _make_app(monkeypatch, tmp_path, initial_networks, has_wwan=False):
     """Build a Gazelle app with network/table helpers mocked for scan tests."""
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    # Avoid shelling out to mmcli/nmcli during app construction.
+    monkeypatch.setattr("app.has_wwan_capabilities", lambda: has_wwan, raising=False)
     from app import Gazelle
 
     config_dir = tmp_path / ".config" / "gazelle"
@@ -232,3 +234,61 @@ def test_on_unmount_kills_running_scan(monkeypatch, tmp_path):
 
     app.workers.cancel_all.assert_called_once()
     app._scan_process.kill.assert_called_once()
+
+
+def test_on_unmount_safe_when_mount_never_ran(monkeypatch, tmp_path):
+    """Regression: _scan_process must exist even if on_mount() failed or never ran."""
+    app, _ = _make_app(monkeypatch, tmp_path, BASELINE)
+    app.workers.cancel_all = MagicMock()
+    # Do not run on_mount(); __init__ alone should leave _scan_process initialized.
+    assert app._scan_process is None
+
+    app.on_unmount()
+
+    app.workers.cancel_all.assert_called_once()
+    # No AttributeError raised.
+
+
+def test_check_action_hides_wwan_bindings_without_capability(monkeypatch, tmp_path):
+    app, _ = _make_app(monkeypatch, tmp_path, BASELINE, has_wwan=False)
+    assert app.check_action("wwan_screen", ()) is False
+    assert app.check_action("toggle_wwan_radio", ()) is False
+
+
+def test_check_action_shows_wwan_bindings_with_capability(monkeypatch, tmp_path):
+    app, _ = _make_app(monkeypatch, tmp_path, BASELINE, has_wwan=True)
+    assert app.check_action("wwan_screen", ()) is True
+    assert app.check_action("toggle_wwan_radio", ()) is True
+
+
+def test_check_action_leaves_other_actions_unaffected(monkeypatch, tmp_path):
+    app, _ = _make_app(monkeypatch, tmp_path, BASELINE, has_wwan=False)
+    assert app.check_action("quit", ()) is True
+    assert app.check_action("vpn_screen", ()) is True
+    assert app.check_action("scan", ()) is True
+
+
+def test_action_toggle_wifi_on_triggers_manual_scan(monkeypatch, tmp_path):
+    app, _ = _make_app(monkeypatch, tmp_path, BASELINE)
+    monkeypatch.setattr("app.toggle_wifi", lambda: True)
+    app.action_scan = MagicMock()
+    app.set_timer = MagicMock()
+
+    app.action_toggle_wifi()
+
+    app.notify.assert_called_once_with("WiFi ON")
+    app.action_scan.assert_called_once()
+    app.set_timer.assert_not_called()
+
+
+def test_action_toggle_wifi_off_refreshes_after_delay(monkeypatch, tmp_path):
+    app, _ = _make_app(monkeypatch, tmp_path, BASELINE)
+    monkeypatch.setattr("app.toggle_wifi", lambda: False)
+    app.action_scan = MagicMock()
+    app.set_timer = MagicMock()
+
+    app.action_toggle_wifi()
+
+    app.notify.assert_called_once_with("WiFi OFF")
+    app.action_scan.assert_not_called()
+    app.set_timer.assert_called_once_with(1, app.refresh_all)
