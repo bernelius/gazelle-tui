@@ -777,7 +777,7 @@ def build_css(styles: dict) -> str:
     .section.active-section {{ border: {styles["section_border"]} $primary; }}
     .section-title {{ text-style: {styles["section_title_text_style"]}; color: $accent; background: $background; padding: {styles["section_title_padding"]}; height: auto; }}
     .section DataTable {{ height: 1fr; }}
-    #device-section, #station-section {{ height: 5; }}
+    #device-section, #station-section {{ height: 4; }}
     Static {{ height: auto; }}
     Input {{ height: {styles["input_height"]}; margin-bottom: 1; }}
     Select {{ height: {styles["input_height"]}; margin-bottom: 1; }}
@@ -901,31 +901,31 @@ class Gazelle(App):
     ]
 
     def compose(self) -> ComposeResult:
+        device_container = Container(DataTable(id="dev"), classes="section", id="device-section")
+        device_container.border_title = "Device"
+        station_container = Container(
+            DataTable(id="sta"),
+            classes="section",
+            id="station-section",
+        )
+        known_container = Container(
+            DataTable(id="known", cursor_type="row"),
+            classes="section",
+            id="known-section",
+        )
+        known_container.border_title = "Known Networks"
+        new_container = Container(
+            DataTable(id="new", cursor_type="row"),
+            classes="section",
+            id="new-section",
+        )
+        new_container.border_title = "New Networks"
+        station_container.border_title = "Station"
         yield ScrollableContainer(
-            Container(
-                Static("Device", classes="section-title"),
-                DataTable(id="dev"),
-                classes="section",
-                id="device-section",
-            ),
-            Container(
-                Static("Station", classes="section-title"),
-                DataTable(id="sta"),
-                classes="section",
-                id="station-section",
-            ),
-            Container(
-                Static("Known Networks", classes="section-title"),
-                DataTable(id="known", cursor_type="row"),
-                classes="section",
-                id="known-section",
-            ),
-            Container(
-                Static("New Networks", classes="section-title"),
-                DataTable(id="new", cursor_type="row"),
-                classes="section",
-                id="new-section",
-            ),
+            device_container,
+            station_container,
+            known_container,
+            new_container,
         )
         yield Footer()
 
