@@ -976,10 +976,12 @@ class Gazelle(App):
         except Exception:
             self.theme = "textual-dark"
 
-        self.query_one("#dev", DataTable).add_columns("Name", "Mode", "Powered", "Address")
+        self.query_one("#dev", DataTable).add_columns("Name", "Mode", "Powered", "MAC Address")
         self.query_one("#dev", DataTable).cursor_type = "none"
         self.query_one("#dev", DataTable).can_focus = False
-        self.query_one("#sta", DataTable).add_columns("State", "Frequency", "Security")
+        self.query_one("#sta", DataTable).add_columns(
+            "State", "Frequency", "Security", "IPv4 Address"
+        )
         self.query_one("#sta", DataTable).cursor_type = "none"
         self.query_one("#sta", DataTable).can_focus = False
         self.query_one("#known", DataTable).add_columns("Name", "Security", "Signal")
@@ -1065,10 +1067,11 @@ class Gazelle(App):
             networks = get_wifi_list(force_rescan=force_rescan)
         avail = {n["ssid"]: n for n in networks}
 
+        iface = get_wifi_interface()
+
         # Device
         t = self.query_one("#dev", DataTable)
         t.clear()
-        iface = get_wifi_interface()
         try:
             mac = subprocess.run(
                 ["cat", f"/sys/class/net/{iface}/address"],
@@ -1100,10 +1103,11 @@ class Gazelle(App):
             pass
 
         # Station
-        t = self.query_one("#sta", DataTable)
+        t = self.query_one("#sta")
         t.clear()
         i = get_station_info()
-        t.add_row(i["state"], i["frequency"], i["security"])
+        ipv4 = get_device_ipv4(iface) if i["state"] == "connected" else "-"
+        t.add_row(i["state"], i["frequency"], i["security"], ipv4)
 
         # Known (only show networks that are in range)
         t = self.query_one("#known", DataTable)

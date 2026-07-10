@@ -3,7 +3,7 @@
 import subprocess
 from unittest.mock import MagicMock, call, patch
 
-from network import get_wifi_list
+from network import get_device_ipv4, get_ethernet_interface, get_wifi_list
 
 
 class TestGetWifiList:
@@ -122,3 +122,86 @@ class TestGetWifiList:
             result = get_wifi_list()
 
         assert result == []
+
+
+class TestGetDeviceIpv4:
+    """Unit tests for get_device_ipv4."""
+
+    def test_returns_first_ipv4_without_cidr(self):
+        nmcli_output = "192.168.1.5/24\n"
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout=nmcli_output, returncode=0)
+            result = get_device_ipv4("wlp0s20f3")
+
+        assert result == "192.168.1.5"
+        mock_run.assert_called_once_with(
+            ["nmcli", "-t", "-g", "IP4.ADDRESS", "device", "show", "wlp0s20f3"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    def test_returns_dash_when_no_address(self):
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="", returncode=0)
+            result = get_device_ipv4("wlp0s20f3")
+
+        assert result == "-"
+
+    def test_returns_dash_when_iface_is_none(self):
+        result = get_device_ipv4(None)
+        assert result == "-"
+
+    def test_returns_dash_when_nmcli_fails(self):
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.CalledProcessError(1, "nmcli")
+            result = get_device_ipv4("wlp0s20f3")
+
+        assert result == "-"
+
+    def test_returns_dash_when_nmcli_missing(self):
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError("nmcli not found")
+            result = get_device_ipv4("wlp0s20f3")
+
+        assert result == "-"
+
+
+class TestGetEthernetInterface:
+    """Unit tests for get_ethernet_interface."""
+
+    def test_returns_ethernet_device(self):
+        nmcli_output = "wlan0:wifi\ntailscale0:tun\nlo:loopback\ndocker0:bridge\n/net/connman/iwd/0:wifi-p2p\neth0:ethernet\n"
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout=nmcli_output, returncode=0)
+            result = get_ethernet_interface()
+
+        assert result == "eth0"
+        mock_run.assert_called_once_with(
+            ["nmcli", "-t", "-f", "DEVICE,TYPE", "device"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    def test_returns_none_when_no_ethernet(self):
+        nmcli_output = "wlan0:wifi\ntailscale0:tun\nlo:loopback\n"
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout=nmcli_output, returncode=0)
+            result = get_ethernet_interface()
+
+        assert result is None
+
+    def test_returns_none_when_nmcli_fails(self):
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.CalledProcessError(1, "nmcli")
+            result = get_ethernet_interface()
+
+        assert result is None
+
+    def test_returns_none_when_nmcli_missing(self):
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError("nmcli not found")
+            result = get_ethernet_interface()
+
+        assert result is None

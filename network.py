@@ -129,6 +129,34 @@ def get_station_info():
     return info
 
 
+def get_device_ipv4(iface) -> str:
+    """Get the IPv4 address for a network device.
+
+    Args:
+        iface: Network interface name.
+
+    Returns:
+        IPv4 address without CIDR prefix, or "-" if unavailable.
+    """
+    if not iface:
+        return "-"
+    try:
+        result = subprocess.run(
+            ["nmcli", "-t", "-g", "IP4.ADDRESS", "device", "show", iface],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            # nmcli returns addresses in CIDR notation (e.g. 192.168.1.5/24)
+            return line.split("/")[0]
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+    return "-"
+
+
 def connect_wifi(ssid, password, hidden=False):
     """Connect to WiFi (supports hidden SSIDs)"""
     try:
@@ -297,9 +325,11 @@ def get_ethernet_interface() -> str | None:
             check=True,
         )
         for line in result.stdout.strip().split("\n"):
-            for device, type in line.split(":"):
-                if type == "ethernet":
-                    return device
+            if ":" not in line:
+                continue
+            device, type = line.split(":", 1)
+            if type == "ethernet":
+                return device
     except (FileNotFoundError, subprocess.CalledProcessError):
         return None
     return None
