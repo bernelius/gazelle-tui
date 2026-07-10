@@ -1313,6 +1313,11 @@ class Gazelle(App):
 
     def action_vpn_screen(self) -> None:
         """Open VPN management screen"""
+        if not get_vpn_list():
+            self.notify(
+                "No VPNs found. VPN connections must be configured in Network Manager before they are available in Gazelle."
+            )
+            return
         self.push_screen(VPNScreen())
 
     def action_wwan_screen(self) -> None:
