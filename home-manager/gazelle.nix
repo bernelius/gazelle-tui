@@ -39,10 +39,25 @@ let
         type = types.nullOr (
           types.submodule {
             options = {
-              accent = mkOption {
+              secondary = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Accent color used for highlights, borders, and the cursor.";
+                description = "Secondary color used for highlights, borders, and the cursor.";
+              };
+              success = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = "Success color used for positive status indicators.";
+              };
+              warning = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = "Warning color used for cautionary status indicators.";
+              };
+              error = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = "Error color used for negative status indicators.";
               };
               primary = mkOption {
                 type = types.nullOr types.str;
@@ -64,8 +79,11 @@ let
         );
         default = null;
         description = ''
-          Semantic color overrides. All four colors must be set for Gazelle
-          to register and use the custom <literal>user-theme</literal>.
+          Semantic color overrides. All four base colors must be set for
+          Gazelle to register and use the custom <literal>user-theme</literal>.
+          Optional status colors (<literal>success</literal>,
+          <literal>warning</literal>, <literal>error</literal>) override the
+          defaults used by Textual widgets such as buttons and notifications.
         '';
       };
 
@@ -161,7 +179,7 @@ let
     theme:
     theme.colors != null
     && all (k: theme.colors.${k} != null) [
-      "accent"
+      "secondary"
       "primary"
       "foreground"
       "background"
@@ -191,7 +209,7 @@ in
         Gazelle theme configuration written to
         <literal>~/.config/gazelle/theme.toml</literal>.
 
-        To use a complete custom color theme, set all four
+        To use a complete custom color theme, set all four base
         <literal>colors</literal> and also set
         <literal>settings.theme = "user-theme"</literal>.
       '';
@@ -202,7 +220,7 @@ in
     assertions = [
       {
         assertion = cfg.theme == null || cfg.theme.colors == null || hasFullColors cfg.theme;
-        message = "programs.gazelle.theme.colors: if set, all four colors (accent, primary, foreground, background) must be specified";
+        message = "programs.gazelle.theme.colors: if set, all four base colors (secondary, primary, foreground, background) must be specified";
       }
     ];
 

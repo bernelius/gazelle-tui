@@ -95,10 +95,13 @@ programs.gazelle = {
 
   theme = {
     colors = {
-      accent     = "#EBCB8B";
+      secondary  = "#EBCB8B";
       primary    = "#BF616A";
       foreground = "#D8DEE9";
       background = "#2E3440";
+      success    = "#A3BE8C";
+      warning    = "#EBCB8B";
+      error      = "#BF616A";
     };
     styles = {
       dialog_border = "round";
@@ -401,19 +404,22 @@ Gazelle supports all built-in Textual themes with automatic persistence.
 
 Create your own color scheme by editing `~/.config/gazelle/theme.toml`. The file is automatically generated with commented examples on first run.
 
-All four semantic colors must be defined under `[colors]` for the custom theme to activate:
+All four base semantic colors must be defined under `[colors]` for the custom theme to activate. Optional status colors default to sensible values when omitted:
 
 ```toml
 [colors]
-accent     = "#EBCB8B"
+secondary  = "#EBCB8B"
 primary    = "#BF616A"
 foreground = "#D8DEE9"
 background = "#2E3440"
+success    = "#A3BE8C"
+warning    = "#EBCB8B"
+error      = "#BF616A"
 ```
 
 If the `[colors]` section is empty or commented out, Gazelle falls back to Omarchy auto-detection (if available) or the built-in `textual-dark` theme.
 
-**Migration:** Older `theme.toml` files that used `[colors.normal]`, `[colors.bright]`, and `[colors.primary]` are automatically migrated to the format above on first run. A backup is saved as `~/.config/gazelle/theme.toml.bak`.
+Gazelle's own UI uses only the four base colors (`$primary`, `$secondary`, `$foreground`, and `$background`). All built-in themes are flattened so there are no extra tints except for the DataTable cursor overlay. Status colors (`$success`, `$warning`, `$error`) are preserved from the built-in theme or the user config for Textual widgets such as buttons and notifications.
 
 Your custom theme appears as "user-theme" in the theme picker (`Ctrl+P`).
 
@@ -442,7 +448,6 @@ section_border = "round"
 | `section_margin` | `1 2` | Section margin |
 | `section_padding` | `0 1` | Section padding |
 | `cursor_opacity` | `30%` | Selection highlight opacity |
-| `hover_opacity` | `20%` | Hover highlight opacity |
 
 ## Connecting to eduroam
 

@@ -450,12 +450,19 @@ def load_omarchy_colors():
         primary = colors.get("primary", {})
 
         return {
-            "accent": normalize_color_format(
+            "secondary": normalize_color_format(
                 normal.get("yellow") or bright.get("yellow") or "#EBCB8B"
             ),
             "primary": normalize_color_format(normal.get("red") or bright.get("red") or "#BF616A"),
             "foreground": normalize_color_format(primary.get("foreground") or "#D8DEE9"),
             "background": normalize_color_format(primary.get("background") or "#2E3440"),
+            "success": normalize_color_format(
+                normal.get("green") or bright.get("green") or "#A3BE8C"
+            ),
+            "warning": normalize_color_format(
+                normal.get("yellow") or bright.get("yellow") or "#EBCB8B"
+            ),
+            "error": normalize_color_format(normal.get("red") or bright.get("red") or "#BF616A"),
         }
     except Exception:
         # If parsing fails, return None to use fallback
@@ -527,28 +534,22 @@ def load_omarchy_styles():
     }
 
 
+# Base semantic colors required for a custom theme to activate.
 _DEFAULT_THEME_COLORS = {
-    "accent": "#EBCB8B",
+    "secondary": "#EBCB8B",
     "primary": "#BF616A",
     "foreground": "#D8DEE9",
     "background": "#2E3440",
 }
 
-_SEMANTIC_COLOR_KEYS = set(_DEFAULT_THEME_COLORS)
+# Optional status colors default to base colors when not specified.
+_DEFAULT_STATUS_COLORS = {
+    "success": "#A3BE8C",
+    "warning": "#EBCB8B",
+    "error": "#BF616A",
+}
 
-
-def _is_old_theme_format(data: dict) -> bool:
-    """Return True if theme.toml uses the pre-semantic nested color format."""
-    colors = data.get("colors")
-    if not isinstance(colors, dict):
-        return False
-
-    # Already migrated if any new semantic key is present as a concrete value.
-    if any(key in colors and not isinstance(colors[key], dict) for key in _SEMANTIC_COLOR_KEYS):
-        return False
-
-    # Old format used nested dicts under colors.
-    return any(isinstance(colors.get(section), dict) for section in ("normal", "bright", "primary"))
+_SEMANTIC_COLOR_KEYS = set(_DEFAULT_THEME_COLORS) | set(_DEFAULT_STATUS_COLORS)
 
 
 def _write_theme_file(
@@ -562,8 +563,12 @@ def _write_theme_file(
         "# Colors should be in hex format (#RRGGBB) or 0xRRGGBB",
         "[colors]",
     ]
-    for key in ("accent", "primary", "foreground", "background"):
+    for key in ("secondary", "primary", "foreground", "background"):
         lines.append(f"{comment_prefix}{key} = {json.dumps(colors[key])}")
+    for key in ("success", "warning", "error"):
+        lines.append(
+            f"{comment_prefix}{key} = {json.dumps(colors.get(key, _DEFAULT_STATUS_COLORS[key]))}"
+        )
 
     if styles:
         lines.extend(
@@ -583,67 +588,6 @@ def _write_theme_file(
     theme_file.write_text("\n".join(lines) + "\n")
 
 
-def migrate_user_theme(config_dir: Path) -> bool:
-    """
-    One-time migration from the old nested color format to the semantic format.
-
-    Backs up the original file to theme.toml.bak. Returns True if a migration
-    was performed. An empty old template (no color values set) is rewritten to
-    the new empty template so it remains inactive.
-    """
-    if tomllib is None:
-        return False
-
-    theme_file = config_dir / "theme.toml"
-    if not theme_file.exists():
-        return False
-
-    try:
-        with open(theme_file, "rb") as f:
-            data = tomllib.load(f)
-
-        if not _is_old_theme_format(data):
-            return False
-
-        colors = data.get("colors", {})
-        normal = colors.get("normal", {})
-        bright = colors.get("bright", {})
-        primary = colors.get("primary", {})
-
-        migrated = {
-            "accent": normal.get("yellow") or bright.get("yellow"),
-            "primary": normal.get("red") or bright.get("red"),
-            "foreground": primary.get("foreground"),
-            "background": primary.get("background"),
-        }
-
-        # If no old colors were actually set, rewrite to the new empty template
-        # so an all-commented file still does not activate a custom theme.
-        if not any(migrated.values()):
-            _write_theme_file(theme_file, _DEFAULT_THEME_COLORS, {}, commented=True)
-            return True
-
-        # Fill any missing colors from defaults so the migrated theme is complete.
-        for key, default in _DEFAULT_THEME_COLORS.items():
-            if not migrated[key]:
-                migrated[key] = default
-            else:
-                migrated[key] = normalize_color_format(migrated[key])
-
-        styles = data.get("styles", {})
-        if not isinstance(styles, dict):
-            styles = {}
-
-        backup_file = theme_file.with_name("theme.toml.bak")
-        backup_file.write_text(theme_file.read_text())
-
-        _write_theme_file(theme_file, migrated, styles)
-        return True
-    except Exception:
-        # If migration fails, leave the file untouched and let loading fall back.
-        return False
-
-
 def load_user_colors(config_dir: Path):
     """
     Load colors from user defined theme file.
@@ -657,30 +601,32 @@ def load_user_colors(config_dir: Path):
     if not theme_file.exists():
         return None
 
-    # Migrate old-format theme files before loading.
-    migrate_user_theme(config_dir)
-
     try:
         with open(theme_file, "rb") as f:
             data = tomllib.load(f)
 
         colors = data.get("colors", {})
 
-        accent = colors.get("accent")
+        secondary = colors.get("secondary")
         primary = colors.get("primary")
         foreground = colors.get("foreground")
         background = colors.get("background")
 
-        # All four semantic colors must be defined for a custom theme to activate.
-        if not all((accent, primary, foreground, background)):
+        # All four base semantic colors must be defined for a custom theme to activate.
+        if not all((secondary, primary, foreground, background)):
             return None
 
-        return {
-            "accent": normalize_color_format(accent),
+        result = {
+            "secondary": normalize_color_format(secondary),
             "primary": normalize_color_format(primary),
             "foreground": normalize_color_format(foreground),
             "background": normalize_color_format(background),
         }
+        for key in _DEFAULT_STATUS_COLORS:
+            value = colors.get(key)
+            result[key] = normalize_color_format(value) if value else _DEFAULT_STATUS_COLORS[key]
+
+        return result
     except Exception:
         # If parsing fails, return None to use fallback
         return None
@@ -698,7 +644,6 @@ DEFAULT_STYLES = {
     "input_height": "3",
     "button_min_width": "12",
     "cursor_opacity": "30%",
-    "hover_opacity": "20%",
     "title_text_style": "bold",
     "section_title_text_style": "bold",
 }
@@ -772,11 +717,11 @@ def build_css(styles: dict) -> str:
     """Build Textual CSS string from style configuration."""
     return f"""
     PasswordScreen, HiddenNetworkScreen, Wired8021xScreen {{ align: center middle; }}
-    #dialog {{ width: {styles["dialog_width"]}; height: auto; border: {styles["dialog_border"]} $accent; background: $background; padding: {styles["dialog_padding"]}; }}
-    #title {{ text-style: {styles["title_text_style"]}; color: $accent; margin-bottom: 1; }}
+    #dialog {{ width: {styles["dialog_width"]}; height: auto; border: {styles["dialog_border"]} $secondary; background: $background; padding: {styles["dialog_padding"]}; }}
+    #title {{ text-style: {styles["title_text_style"]}; color: $secondary; margin-bottom: 1; }}
     .section {{ border: {styles["section_border"]} $foreground; border-title-style: bold; margin: {styles["section_margin"]}; padding: {styles["section_padding"]}; height: 1fr; layout: vertical; }}
     .section.active-section {{ border: {styles["section_border"]} $primary; }}
-    .section-title {{ text-style: {styles["section_title_text_style"]}; color: $accent; background: $background; padding: {styles["section_title_padding"]}; height: auto; }}
+    .section-title {{ text-style: {styles["section_title_text_style"]}; color: $secondary; background: $background; padding: {styles["section_title_padding"]}; height: auto; }}
     .section DataTable {{ height: 1fr; }}
     #device-section, #station-section {{ height: 4; }}
     Static {{ height: auto; }}
@@ -785,27 +730,43 @@ def build_css(styles: dict) -> str:
     Horizontal {{ height: auto; margin-top: 1; }}
     Button {{ min-width: {styles["button_min_width"]}; }}
 
-    /* DataTable selection/cursor colors */
+    /* Flat DataTable: one background color everywhere except the cursor. */
+    DataTable {{
+        background: $background;
+    }}
+
     DataTable > .datatable--cursor {{
-        background: $accent {styles["cursor_opacity"]};
+        background: $secondary {styles["cursor_opacity"]};
         color: $foreground;
     }}
 
-    /* Remove the default focus background tint from all DataTables so the
-       container background doesn't change. */
+    DataTable > .datatable--header {{
+        background: $background;
+        color: $secondary;
+    }}
+
     DataTable:focus {{
         background-tint: transparent;
     }}
 
-    /* Keep header rows unchanged when DataTables are focused or hovered. */
     DataTable:focus > .datatable--header {{
+        background: $background;
         background-tint: transparent;
-        color: $accent;
+        color: $secondary;
     }}
 
     DataTable > .datatable--header-hover {{
-        background: transparent;
-        color: $accent;
+        background: $background;
+        color: $secondary;
+    }}
+
+    DataTable > .datatable--row-hover {{
+        background: $background;
+        color: $foreground;
+    }}
+
+    DataTable > .datatable--even-row, DataTable > .datatable--odd-row {{
+        background: $background;
     }}
     """
 
@@ -836,6 +797,48 @@ def resolve_theme(saved_theme, has_user_theme, has_omarchy_theme, theme_exists):
     return "textual-dark", True
 
 
+def _flatten_builtin_themes(app: App) -> None:
+    """Override every builtin Textual theme with a 4-color flattened version.
+
+    Gazelle only uses $primary and $secondary, so $accent is forced to equal
+    $secondary. $surface, $panel and $background are collapsed to the same
+    color and $boost is made transparent so there are no hover/focus tints.
+    """
+    from textual.design import DEFAULT_DARK_BACKGROUND, DEFAULT_LIGHT_BACKGROUND
+
+    custom_names = {"user-theme", "omarchy-auto"}
+    for name in list(app.available_themes):
+        if name in custom_names:
+            continue
+        original = app.get_theme(name)
+        if original is None:
+            continue
+
+        background = original.background or (
+            DEFAULT_DARK_BACKGROUND if original.dark else DEFAULT_LIGHT_BACKGROUND
+        )
+        secondary = original.secondary or original.accent or original.primary
+
+        app.register_theme(
+            Theme(
+                name=name,
+                primary=original.primary,
+                secondary=secondary,
+                accent=secondary,
+                foreground=original.foreground,
+                background=background,
+                surface=background,
+                panel=background,
+                boost="transparent",
+                success=original.success,
+                warning=original.warning,
+                error=original.error,
+                dark=original.dark,
+                variables=original.variables,
+            )
+        )
+
+
 def try_create_user_theme_template(config_dir: Path):
     """If file doesn't exist, create a template theme.toml file with commented examples"""
     theme_file = config_dir / "theme.toml"
@@ -849,10 +852,13 @@ def try_create_user_theme_template(config_dir: Path):
 # Uncomment and modify these values to customize your theme
 # Colors should be in hex format (#RRGGBB) or 0xRRGGBB
 [colors]
-#accent     = "#EBCB8B"
+#secondary  = "#EBCB8B"
 #primary    = "#BF616A"
 #foreground = "#D8DEE9"
 #background = "#2E3440"
+#success    = "#A3BE8C"
+#warning    = "#EBCB8B"
+#error      = "#BF616A"
 
 # TUI Style Overrides
 # Uncomment and modify these values to customize borders, spacing, etc.
@@ -870,7 +876,6 @@ def try_create_user_theme_template(config_dir: Path):
 #input_height = "3"
 #button_min_width = "12"
 #cursor_opacity = "30%"
-#hover_opacity = "20%"
 #title_text_style = "bold"
 #section_title_text_style = "bold"
 """
@@ -963,12 +968,16 @@ class Gazelle(App):
                 Theme(
                     name="user-theme",
                     primary=user_colors["primary"],
-                    secondary=user_colors["accent"],
-                    accent=user_colors["accent"],
+                    secondary=user_colors["secondary"],
+                    accent=user_colors["secondary"],
                     foreground=user_colors["foreground"],
                     background=user_colors["background"],
                     surface=user_colors["background"],
                     panel=user_colors["background"],
+                    boost="transparent",
+                    success=user_colors["success"],
+                    warning=user_colors["warning"],
+                    error=user_colors["error"],
                     dark=True,
                 )
             )
@@ -978,15 +987,22 @@ class Gazelle(App):
                 Theme(
                     name="omarchy-auto",
                     primary=omarchy_colors["primary"],
-                    secondary=omarchy_colors["accent"],
-                    accent=omarchy_colors["accent"],
+                    secondary=omarchy_colors["secondary"],
+                    accent=omarchy_colors["secondary"],
                     foreground=omarchy_colors["foreground"],
                     background=omarchy_colors["background"],
                     surface=omarchy_colors["background"],
                     panel=omarchy_colors["background"],
+                    boost="transparent",
+                    success=omarchy_colors["success"],
+                    warning=omarchy_colors["warning"],
+                    error=omarchy_colors["error"],
                     dark=True,
                 )
             )
+
+        # Flatten all builtin themes so they only use the four Gazelle colors.
+        _flatten_builtin_themes(self)
 
         # config.json is the source of truth for the active theme
         config = self.load_config()
