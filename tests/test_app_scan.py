@@ -32,7 +32,7 @@ def _make_app(monkeypatch, tmp_path, initial_networks, has_wwan=False):
 
     config_dir = tmp_path / ".config" / "gazelle"
     monkeypatch.setattr(Gazelle, "CONFIG_DIR", config_dir)
-    monkeypatch.setattr(Gazelle, "CONFIG_FILE", config_dir / "config.json")
+    monkeypatch.setattr(Gazelle, "CONFIG_FILE", config_dir / "config.toml")
 
     app = Gazelle()
     app.run_worker = MagicMock()

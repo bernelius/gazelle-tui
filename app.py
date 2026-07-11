@@ -469,71 +469,6 @@ def load_omarchy_colors():
         return None
 
 
-def load_omarchy_styles():
-    """
-    Detect border style preferences from Omarchy's Hyprland config.
-    Checks all Hyprland config sources in cascade order (last value wins):
-      1. ~/.local/share/omarchy/default/hypr/looknfeel.conf (system default)
-      2. ~/.config/omarchy/current/theme/hyprland.conf (theme override)
-      3. ~/.config/hypr/looknfeel.conf (user override)
-    Returns dict with border style overrides, or None if not found.
-    """
-    # Check if this is an Omarchy system
-    omarchy_indicator = Path.home() / ".config/omarchy/current/theme/alacritty.toml"
-    if not omarchy_indicator.exists():
-        return None
-
-    # Hyprland sources in cascade order — last uncommented value wins
-    config_files = [
-        Path.home() / ".local/share/omarchy/default/hypr/looknfeel.conf",
-        Path.home() / ".config/omarchy/current/theme/hyprland.conf",
-        Path.home() / ".config/hypr/looknfeel.conf",
-    ]
-
-    rounding = 0  # Default: no rounding
-    border_size = 2  # Omarchy default
-
-    try:
-        for config_file in config_files:
-            if not config_file.exists():
-                continue
-            with open(config_file, "r") as f:
-                for line in f:
-                    stripped = line.strip()
-                    # Skip comments
-                    if stripped.startswith("#"):
-                        continue
-                    if "=" in stripped:
-                        key, _, val = stripped.partition("=")
-                        key_name = key.strip()
-                        if key_name == "rounding":
-                            rounding = int(val.strip())
-                        elif key_name == "border_size":
-                            border_size = int(val.strip())
-    except Exception:
-        return None
-
-    # Rounding takes priority — use rounded borders
-    if rounding > 0:
-        return {
-            "dialog_border": "round",
-            "section_border": "round",
-        }
-
-    # Map Hyprland border_size to closest Textual border style
-    if border_size == 0:
-        border_style = "blank"
-    elif border_size >= 3:
-        border_style = "heavy"
-    else:
-        border_style = "solid"
-
-    return {
-        "dialog_border": border_style,
-        "section_border": border_style,
-    }
-
-
 # Base semantic colors required for a custom theme to activate.
 _DEFAULT_THEME_COLORS = {
     "secondary": "#EBCB8B",
@@ -550,42 +485,6 @@ _DEFAULT_STATUS_COLORS = {
 }
 
 _SEMANTIC_COLOR_KEYS = set(_DEFAULT_THEME_COLORS) | set(_DEFAULT_STATUS_COLORS)
-
-
-def _write_theme_file(
-    theme_file: Path, colors: dict, styles: dict, commented: bool = False
-) -> None:
-    """Write a theme.toml file from the semantic color and style dicts."""
-    comment_prefix = "#" if commented else ""
-    lines = [
-        "# Gazelle Theme Configuration",
-        "# Uncomment and modify these values to customize your theme",
-        "# Colors should be in hex format (#RRGGBB) or 0xRRGGBB",
-        "[colors]",
-    ]
-    for key in ("secondary", "primary", "foreground", "background"):
-        lines.append(f"{comment_prefix}{key} = {json.dumps(colors[key])}")
-    for key in ("success", "warning", "error"):
-        lines.append(
-            f"{comment_prefix}{key} = {json.dumps(colors.get(key, _DEFAULT_STATUS_COLORS[key]))}"
-        )
-
-    if styles:
-        lines.extend(
-            [
-                "",
-                "# TUI Style Overrides",
-                "# Uncomment and modify these values to customize borders, spacing, etc.",
-                "# Border styles: ascii, blank, dashed, double, heavy, hidden, hkey, inner,",
-                "#   none, outer, panel, round, solid, tall, thick, vkey, wide",
-                '# Spacing values use Textual CSS units (e.g. "1 2" = 1 vertical, 2 horizontal)',
-                "[styles]",
-            ]
-        )
-        for key, value in styles.items():
-            lines.append(f"{key} = {json.dumps(value)}")
-
-    theme_file.write_text("\n".join(lines) + "\n")
 
 
 def load_user_colors(config_dir: Path):
@@ -632,154 +531,15 @@ def load_user_colors(config_dir: Path):
         return None
 
 
-# Default style values matching the original hardcoded CSS
-DEFAULT_STYLES = {
-    "dialog_border": "solid",
-    "dialog_width": "60",
-    "dialog_padding": "1 2",
-    "section_border": "solid",
-    "section_margin": "1 2",
-    "section_padding": "0 1",
-    "section_title_padding": "0 1",
-    "input_height": "3",
-    "button_min_width": "12",
-    "cursor_opacity": "30%",
-    "title_text_style": "bold",
-    "section_title_text_style": "bold",
-}
-
-# Valid Textual border styles for validation
-VALID_BORDER_STYLES = {
-    "none",
-    "ascii",
-    "blank",
-    "dashed",
-    "double",
-    "heavy",
-    "hidden",
-    "hkey",
-    "inner",
-    "outer",
-    "panel",
-    "round",
-    "solid",
-    "tall",
-    "thick",
-    "vkey",
-    "wide",
-}
-
-
-def load_user_styles(config_dir: Path, omarchy_styles: dict | None = None):
-    """
-    Load TUI style overrides from user theme file.
-    Returns dict with style values merged over defaults.
-    Priority: defaults -> omarchy auto-detect -> user theme.toml
-    """
-    styles = dict(DEFAULT_STYLES)
-
-    # Apply Omarchy auto-detected styles over defaults
-    if omarchy_styles:
-        for key, value in omarchy_styles.items():
-            if key in DEFAULT_STYLES:
-                styles[key] = value
-
-    if tomllib is None:
-        return styles
-
-    theme_file = config_dir / "theme.toml"
-    if not theme_file.exists():
-        return styles
-
-    try:
-        with open(theme_file, "rb") as f:
-            data = tomllib.load(f)
-
-        user_styles = data.get("styles", {})
-        for key, value in user_styles.items():
-            # Normalize key: allow hyphens or underscores
-            norm_key = key.replace("-", "_")
-            if norm_key in DEFAULT_STYLES:
-                str_val = str(value)
-                # Validate border styles
-                if norm_key in ("dialog_border", "section_border"):
-                    if str_val.lower() not in VALID_BORDER_STYLES:
-                        continue
-                    str_val = str_val.lower()
-                styles[norm_key] = str_val
-    except Exception:
-        pass
-
-    return styles
-
-
-def build_css(styles: dict) -> str:
-    """Build Textual CSS string from style configuration."""
-    return f"""
-    PasswordScreen, HiddenNetworkScreen, Wired8021xScreen {{ align: center middle; }}
-    #dialog {{ width: {styles["dialog_width"]}; height: auto; border: {styles["dialog_border"]} $secondary; background: $background; padding: {styles["dialog_padding"]}; }}
-    #title {{ text-style: {styles["title_text_style"]}; color: $secondary; margin-bottom: 1; }}
-    .section {{ border: {styles["section_border"]} $foreground; border-title-style: bold; margin: {styles["section_margin"]}; padding: {styles["section_padding"]}; height: 1fr; layout: vertical; }}
-    .section.active-section {{ border: {styles["section_border"]} $primary; }}
-    .section-title {{ text-style: {styles["section_title_text_style"]}; color: $secondary; background: $background; padding: {styles["section_title_padding"]}; height: auto; }}
-    .section DataTable {{ height: 1fr; }}
-    #device-section, #station-section {{ height: 4; }}
-    Static {{ height: auto; }}
-    Input {{ height: {styles["input_height"]}; margin-bottom: 1; }}
-    Select {{ height: {styles["input_height"]}; margin-bottom: 1; }}
-    Horizontal {{ height: auto; margin-top: 1; }}
-    Button {{ min-width: {styles["button_min_width"]}; }}
-
-    /* Flat DataTable: one background color everywhere except the cursor. */
-    DataTable {{
-        background: $background;
-    }}
-
-    DataTable > .datatable--cursor {{
-        background: $secondary {styles["cursor_opacity"]};
-        color: $foreground;
-    }}
-
-    DataTable > .datatable--header {{
-        background: $background;
-        color: $secondary;
-    }}
-
-    DataTable:focus {{
-        background-tint: transparent;
-    }}
-
-    DataTable:focus > .datatable--header {{
-        background: $background;
-        background-tint: transparent;
-        color: $secondary;
-    }}
-
-    DataTable > .datatable--header-hover {{
-        background: $background;
-        color: $secondary;
-    }}
-
-    DataTable > .datatable--row-hover {{
-        background: $background;
-        color: $foreground;
-    }}
-
-    DataTable > .datatable--even-row, DataTable > .datatable--odd-row {{
-        background: $background;
-    }}
-    """
-
-
 def resolve_theme(saved_theme, has_user_theme, has_omarchy_theme, theme_exists):
     """Determine the effective theme and whether it should be persisted.
 
-    config.json is the source of truth: if it names a valid theme, that theme
+    config.toml is the source of truth: if it names a valid theme, that theme
     is used unchanged. Otherwise the app auto-detects a default and the result
-    is written back to config.json.
+    is written back to config.toml.
 
     Args:
-        saved_theme: Theme name from config.json, or None.
+        saved_theme: Theme name from config.toml, or None.
         has_user_theme: True if a user theme.toml was loaded successfully.
         has_omarchy_theme: True if an Omarchy theme was detected.
         theme_exists: Callable that returns True for available theme names.
@@ -840,7 +600,7 @@ def _flatten_builtin_themes(app: App) -> None:
 
 
 def try_create_user_theme_template(config_dir: Path):
-    """If file doesn't exist, create a template theme.toml file with commented examples"""
+    """If file doesn't exist, create a template theme.toml file with commented color examples"""
     theme_file = config_dir / "theme.toml"
     theme_dir = theme_file.parent
 
@@ -859,25 +619,6 @@ def try_create_user_theme_template(config_dir: Path):
 #success    = "#A3BE8C"
 #warning    = "#EBCB8B"
 #error      = "#BF616A"
-
-# TUI Style Overrides
-# Uncomment and modify these values to customize borders, spacing, etc.
-# Border styles: ascii, blank, dashed, double, heavy, hidden, hkey, inner,
-#   none, outer, panel, round, solid, tall, thick, vkey, wide
-# Spacing values use Textual CSS units (e.g. "1 2" = 1 vertical, 2 horizontal)
-[styles]
-#dialog_border = "solid"
-#dialog_width = "60"
-#dialog_padding = "1 2"
-#section_border = "solid"
-#section_margin = "1 2"
-#section_padding = "0 1"
-#section_title_padding = "0 1"
-#input_height = "3"
-#button_min_width = "12"
-#cursor_opacity = "30%"
-#title_text_style = "bold"
-#section_title_text_style = "bold"
 """
         with open(theme_file, "w") as f:
             f.write(template_content)
@@ -888,12 +629,62 @@ def try_create_user_theme_template(config_dir: Path):
 class Gazelle(App):
     TITLE = "Gazelle"
     CONFIG_DIR = Path.home() / ".config" / "gazelle"
-    CONFIG_FILE = CONFIG_DIR / "config.json"
+    CONFIG_FILE = CONFIG_DIR / "config.toml"
 
-    # Load styles: defaults -> omarchy auto-detect -> user overrides
-    _omarchy_styles = load_omarchy_styles()
-    _user_styles = load_user_styles(CONFIG_DIR, _omarchy_styles)
-    CSS = build_css(_user_styles)
+    CSS = """
+    PasswordScreen, HiddenNetworkScreen, Wired8021xScreen { align: center middle; }
+    #dialog { width: 60; height: auto; border: solid $secondary; background: $background; padding: 1 2; }
+    #title { text-style: bold; color: $secondary; margin-bottom: 1; }
+    .section { border: solid $foreground; border-title-style: bold; margin: 1 2; padding: 0 1; height: 1fr; layout: vertical; }
+    .section.active-section { border: solid $primary; }
+    .section-title { text-style: bold; color: $secondary; background: $background; padding: 0 1; height: auto; }
+    .section DataTable { height: 1fr; }
+    #device-section, #station-section { height: 4; }
+    Static { height: auto; }
+    Input { height: 3; margin-bottom: 1; }
+    Select { height: 3; margin-bottom: 1; }
+    Horizontal { height: auto; margin-top: 1; }
+    Button { min-width: 12; }
+
+    /* Flat DataTable: one background color everywhere except the cursor. */
+    DataTable {
+        background: $background;
+    }
+
+    DataTable > .datatable--cursor {
+        background: $secondary 30%;
+        color: $foreground;
+    }
+
+    DataTable > .datatable--header {
+        background: $background;
+        color: $secondary;
+    }
+
+    DataTable:focus {
+        background-tint: transparent;
+    }
+
+    DataTable:focus > .datatable--header {
+        background: $background;
+        background-tint: transparent;
+        color: $secondary;
+    }
+
+    DataTable > .datatable--header-hover {
+        background: $background;
+        color: $secondary;
+    }
+
+    DataTable > .datatable--row-hover {
+        background: $background;
+        color: $foreground;
+    }
+
+    DataTable > .datatable--even-row, DataTable > .datatable--odd-row {
+        background: $background;
+    }
+    """
 
     # Currently selected network section ("known" or "new") for visual highlighting.
     active_section = reactive(None)
@@ -1004,7 +795,7 @@ class Gazelle(App):
         # Flatten all builtin themes so they only use the four Gazelle colors.
         _flatten_builtin_themes(self)
 
-        # config.json is the source of truth for the active theme
+        # config.toml is the source of truth for the active theme
         config = self.load_config()
         saved_theme = config.get("theme")
 
@@ -1070,38 +861,42 @@ class Gazelle(App):
         self.update_info_sections_visibility()
 
     def load_config(self) -> dict:
-        """Load configuration from ~/.config/gazelle/config.json
+        """Load configuration from ~/.config/gazelle/config.toml
 
         Returns:
             dict: Configuration dictionary, or empty dict if file doesn't exist
         """
         try:
-            if self.CONFIG_FILE.exists():
-                return json.loads(self.CONFIG_FILE.read_text())
-        except (json.JSONDecodeError, OSError) as e:
+            if self.CONFIG_FILE.exists() and tomllib is not None:
+                with open(self.CONFIG_FILE, "rb") as f:
+                    return tomllib.load(f)
+        except Exception as e:
             # If config is corrupted, log error and return empty dict
             self.log.error(f"Failed to load config: {e}")
         return {}
 
     def save_config(self, data: dict) -> None:
-        """Save configuration to ~/.config/gazelle/config.json
+        """Save configuration to ~/.config/gazelle/config.toml
 
         Args:
-            data: Dictionary to save as JSON
+            data: Dictionary to save as TOML
         """
         try:
             # Create config directory if it doesn't exist
             self.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
-            # Write config file with pretty formatting
-            self.CONFIG_FILE.write_text(json.dumps(data, indent=2))
+            # Write minimal TOML manually; only theme is supported
+            lines = []
+            if "theme" in data:
+                lines.append(f"theme = {json.dumps(data['theme'])}")
+            self.CONFIG_FILE.write_text("\n".join(lines) + "\n")
         except OSError as e:
             self.log.error(f"Failed to save config: {e}")
 
     def watch_theme(self, new_theme: str) -> None:
         """Automatically called by Textual when self.theme changes.
 
-        Saves the new theme to config file for persistence.
+        Saves the new theme to config.toml for persistence.
 
         Args:
             new_theme: The new theme name that was just set

@@ -114,7 +114,7 @@ programs.gazelle = {
 Home Manager will automatically generate:
 
 ```
-~/.config/gazelle/config.json
+~/.config/gazelle/config.toml
 ~/.config/gazelle/theme.toml
 ```
 
@@ -383,7 +383,7 @@ Gazelle supports all built-in Textual themes with automatic persistence.
 
 1. Press `Ctrl+P` to open the command palette
 2. Type "theme" and select from available themes
-3. Your selection is automatically saved to `~/.config/gazelle/config.json`
+3. Your selection is automatically saved to `~/.config/gazelle/config.toml`
 4. Theme persists across app restarts
 
 **Available Themes:**
@@ -398,7 +398,7 @@ Gazelle supports all built-in Textual themes with automatic persistence.
 - tokyo-night
 - ...and many more!
 
-**Config File Location:** `~/.config/gazelle/config.json`
+**Config File Location:** `~/.config/gazelle/config.toml`
 
 ## Custom Themes
 
@@ -422,32 +422,6 @@ If the `[colors]` section is empty or commented out, Gazelle falls back to Omarc
 Gazelle's own UI uses only the four base colors (`$primary`, `$secondary`, `$foreground`, and `$background`). All built-in themes are flattened so there are no extra tints except for the DataTable cursor overlay. Status colors (`$success`, `$warning`, `$error`) are preserved from the built-in theme or the user config for Textual widgets such as buttons and notifications.
 
 Your custom theme appears as "user-theme" in the theme picker (`Ctrl+P`).
-
-## Custom Styles
-
-Customize borders, spacing, and other TUI elements by adding a `[styles]` section to `~/.config/gazelle/theme.toml`:
-
-```toml
-[styles]
-dialog_border = "round"
-section_border = "round"
-```
-
-**Omarchy Users:** Border styles are automatically matched to your Hyprland rounding and border size settings. No configuration needed.
-
-**Available border styles:** `none`, `ascii`, `blank`, `dashed`, `double`, `heavy`, `round`, `solid`, `thick`, `wide`
-
-**All style options:**
-
-| Option | Default | Description |
-|---|---|---|
-| `dialog_border` | `solid` | Modal dialog border style |
-| `section_border` | `solid` | Section container border style |
-| `dialog_width` | `60` | Modal dialog width |
-| `dialog_padding` | `1 2` | Modal dialog padding |
-| `section_margin` | `1 2` | Section margin |
-| `section_padding` | `0 1` | Section padding |
-| `cursor_opacity` | `30%` | Selection highlight opacity |
 
 ## Connecting to eduroam
 

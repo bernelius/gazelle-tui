@@ -12,26 +12,6 @@ let
 
   tomlFormat = pkgs.formats.toml { };
 
-  validBorderStyles = [
-    "none"
-    "ascii"
-    "blank"
-    "dashed"
-    "double"
-    "heavy"
-    "hidden"
-    "hkey"
-    "inner"
-    "outer"
-    "panel"
-    "round"
-    "solid"
-    "tall"
-    "thick"
-    "vkey"
-    "wide"
-  ];
-
   # Nix representation of theme.toml.
   themeType = types.submodule {
     options = {
@@ -87,81 +67,6 @@ let
         '';
       };
 
-      styles = mkOption {
-        type = types.nullOr (
-          types.submodule {
-            options = {
-              dialog_border = mkOption {
-                type = types.nullOr (types.enum validBorderStyles);
-                default = null;
-                description = "Border style of modal dialogs.";
-              };
-              dialog_width = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Width of modal dialogs (Textual CSS units).";
-              };
-              dialog_padding = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Padding inside modal dialogs (Textual CSS units).";
-              };
-              section_border = mkOption {
-                type = types.nullOr (types.enum validBorderStyles);
-                default = null;
-                description = "Border style of main sections.";
-              };
-              section_margin = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Margin around main sections (Textual CSS units).";
-              };
-              section_padding = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Padding inside main sections (Textual CSS units).";
-              };
-              section_title_padding = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Padding around section titles (Textual CSS units).";
-              };
-              input_height = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Height of input fields and selects.";
-              };
-              button_min_width = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Minimum width of buttons.";
-              };
-              cursor_opacity = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Opacity of the DataTable cursor highlight.";
-              };
-              hover_opacity = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Opacity of the DataTable hover highlight.";
-              };
-              title_text_style = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Text style of dialog titles.";
-              };
-              section_title_text_style = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Text style of section titles.";
-              };
-            };
-          }
-        );
-        default = null;
-        description = "TUI style overrides for borders, spacing, and text styling.";
-      };
     };
   };
 
@@ -170,10 +75,8 @@ let
     theme:
     let
       colors = if theme.colors == null then null else filterAttrs (n: v: v != null) theme.colors;
-      styles = if theme.styles == null then null else filterAttrs (n: v: v != null) theme.styles;
     in
-    optionalAttrs (colors != null && colors != { }) { inherit colors; }
-    // optionalAttrs (styles != null && styles != { }) { inherit styles; };
+    optionalAttrs (colors != null && colors != { }) { inherit colors; };
 
   hasFullColors =
     theme:
@@ -199,7 +102,7 @@ in
       default = {
         theme = "textual-dark";
       };
-      description = "Gazelle settings (will be written to ~/.config/gazelle/config.json)";
+      description = "Gazelle settings (will be written to ~/.config/gazelle/config.toml)";
     };
 
     theme = mkOption {
@@ -224,7 +127,7 @@ in
       }
     ];
 
-    home.file.".config/gazelle/config.json".text = builtins.toJSON cfg.settings;
+    home.file.".config/gazelle/config.toml".source = tomlFormat.generate "config.toml" cfg.settings;
 
     home.file.".config/gazelle/theme.toml" = mkIf (cfg.theme != null) {
       source = tomlFormat.generate "theme.toml" (themeToToml cfg.theme);

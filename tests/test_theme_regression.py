@@ -4,7 +4,6 @@ These tests exercise the behavior changes that theme-fixes introduces over
 main. They should fail when run on main and pass when run on theme-fixes.
 """
 
-import json
 import os
 import subprocess
 import sys
@@ -21,7 +20,7 @@ class TestDefaultFallback:
 
         config_dir = tmp_path / ".config" / "gazelle"
         monkeypatch.setattr(Gazelle, "CONFIG_DIR", config_dir)
-        monkeypatch.setattr(Gazelle, "CONFIG_FILE", config_dir / "config.json")
+        monkeypatch.setattr(Gazelle, "CONFIG_FILE", config_dir / "config.toml")
 
         app = Gazelle()
         app.query_one = MagicMock(return_value=MagicMock())
@@ -72,8 +71,8 @@ class TestLegacyAutoThemeMigration:
 
         config_dir = tmp_path / ".config" / "gazelle"
         config_dir.mkdir(parents=True)
-        config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"theme": "auto"}))
+        config_file = config_dir / "config.toml"
+        config_file.write_text('theme = "auto"\n')
 
         monkeypatch.setattr(Gazelle, "CONFIG_DIR", config_dir)
         monkeypatch.setattr(Gazelle, "CONFIG_FILE", config_file)
@@ -84,7 +83,7 @@ class TestLegacyAutoThemeMigration:
         app.on_mount()
 
         assert app.theme == "textual-dark"
-        assert json.loads(config_file.read_text()) == {"theme": "textual-dark"}
+        assert config_file.read_text() == 'theme = "textual-dark"\n'
 
 
 class TestUserThemeFallbackRemoval:
@@ -96,8 +95,8 @@ class TestUserThemeFallbackRemoval:
 
         config_dir = tmp_path / ".config" / "gazelle"
         config_dir.mkdir(parents=True)
-        config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"theme": "user-theme"}))
+        config_file = config_dir / "config.toml"
+        config_file.write_text('theme = "user-theme"\n')
         # Intentionally no theme.toml
 
         monkeypatch.setattr(Gazelle, "CONFIG_DIR", config_dir)

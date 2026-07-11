@@ -46,7 +46,7 @@ The application is three files plus tests:
 
 ### Theme System
 
-`config.json["theme"]` is the source of truth once set. On first run, the app auto-detects a default in this order:
+`config.toml["theme"]` is the source of truth once set. On first run, the app auto-detects a default in this order:
 1. **User custom theme** - `~/.config/gazelle/theme.toml` (only if all four base `[colors]` keys are defined)
 2. **Omarchy auto-detection** - reads `~/.config/omarchy/current/theme/alacritty.toml`
 3. **Built-in Textual themes** - `textual-dark` is the default
@@ -68,15 +68,15 @@ The four base colors (`secondary`, `primary`, `foreground`, `background`) must a
 
 An empty or fully commented `[colors]` section means the custom theme does not activate, so Omarchy or the built-in default is used.
 
-Textual's built-in themes are available and can be selected manually via the command palette (`Ctrl+P`) or by setting `"theme"` in `config.json`. Gazelle's own UI only uses the four base colors (`$primary`, `$secondary`, `$foreground`, and `$background`), so every built-in theme is flattened on startup: `$surface`, `$panel`, and `$boost` are collapsed to `$background` and `$accent` is forced to equal `$secondary`. Status colors (`$success`, `$warning`, `$error`) are preserved from the built-in theme or the user config for Textual widgets such as buttons and notifications.
+Textual's built-in themes are available and can be selected manually via the command palette (`Ctrl+P`) or by setting `"theme"` in `config.toml`. Gazelle's own UI only uses the four base colors (`$primary`, `$secondary`, `$foreground`, and `$background`), so every built-in theme is flattened on startup: `$surface`, `$panel`, and `$boost` are collapsed to `$background` and `$accent` is forced to equal `$secondary`. Status colors (`$success`, `$warning`, `$error`) are preserved from the built-in theme or the user config for Textual widgets such as buttons and notifications.
 
-Theme choice persists in `~/.config/gazelle/config.json`. Helper functions `resolve_theme()`, `load_omarchy_colors()`, `load_user_colors()`, `load_user_styles()`, and `normalize_color_format()` handle theme resolution, color/style loading, and format conversion (0xRRGGBB to #RRGGBB).
+Theme choice persists in `~/.config/gazelle/config.toml`. Helper functions `resolve_theme()`, `load_omarchy_colors()`, `load_user_colors()`, and `normalize_color_format()` handle theme resolution, color loading, and format conversion (0xRRGGBB to #RRGGBB).
 
 ### Configuration
 
 - Config dir: `~/.config/gazelle/` (uses `platformdirs` constant `CONFIG_DIR`)
-- Config file: `config.json` (currently only stores theme preference)
-- Theme file: `theme.toml` (user custom colors, auto-generated template on first run; `[styles]` section is optional)
+- Config file: `config.toml` (currently only stores theme preference)
+- Theme file: `theme.toml` (user custom colors, auto-generated template on first run)
 
 ## Packaging
 

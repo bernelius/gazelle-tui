@@ -1,6 +1,5 @@
 """Tests for Gazelle theme loading and resolution."""
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -217,7 +216,7 @@ class TestOnMountThemeSelection:
         from app import Gazelle
 
         config_dir = tmp_path / ".config" / "gazelle"
-        config_file = config_dir / "config.json"
+        config_file = config_dir / "config.toml"
         monkeypatch.setattr(Gazelle, "CONFIG_DIR", config_dir)
         monkeypatch.setattr(Gazelle, "CONFIG_FILE", config_file)
 
@@ -232,11 +231,11 @@ class TestOnMountThemeSelection:
         assert gazelle_app.theme == "textual-dark"
         assert gazelle_app.CONFIG_FILE.exists()
 
-        assert json.loads(gazelle_app.CONFIG_FILE.read_text()) == {"theme": "textual-dark"}
+        assert gazelle_app.CONFIG_FILE.read_text() == 'theme = "textual-dark"\n'
 
     def test_existing_config_theme_is_source_of_truth(self, gazelle_app):
         gazelle_app.CONFIG_DIR.mkdir(parents=True)
-        gazelle_app.CONFIG_FILE.write_text(json.dumps({"theme": "nord"}))
+        gazelle_app.CONFIG_FILE.write_text('theme = "nord"\n')
 
         gazelle_app.on_mount()
 
@@ -244,12 +243,12 @@ class TestOnMountThemeSelection:
 
     def test_invalid_saved_theme_falls_back_and_saves(self, gazelle_app):
         gazelle_app.CONFIG_DIR.mkdir(parents=True)
-        gazelle_app.CONFIG_FILE.write_text(json.dumps({"theme": "user-theme"}))
+        gazelle_app.CONFIG_FILE.write_text('theme = "user-theme"\n')
 
         gazelle_app.on_mount()
 
         assert gazelle_app.theme == "textual-dark"
-        assert json.loads(gazelle_app.CONFIG_FILE.read_text()) == {"theme": "textual-dark"}
+        assert gazelle_app.CONFIG_FILE.read_text() == 'theme = "textual-dark"\n'
 
     def test_user_theme_detected_and_saved(self, tmp_path, monkeypatch, gazelle_app):
         # Create a user theme file in the patched home directory
@@ -268,7 +267,7 @@ background = "#000000"
         gazelle_app.on_mount()
 
         assert gazelle_app.theme == "user-theme"
-        assert json.loads(gazelle_app.CONFIG_FILE.read_text()) == {"theme": "user-theme"}
+        assert gazelle_app.CONFIG_FILE.read_text() == 'theme = "user-theme"\n'
 
     def test_omarchy_theme_detected_and_saved(self, tmp_path, monkeypatch, gazelle_app):
         # Create an Omarchy theme file in the patched home directory
@@ -289,7 +288,7 @@ red = "#BF616A"
         gazelle_app.on_mount()
 
         assert gazelle_app.theme == "omarchy-auto"
-        assert json.loads(gazelle_app.CONFIG_FILE.read_text()) == {"theme": "omarchy-auto"}
+        assert gazelle_app.CONFIG_FILE.read_text() == 'theme = "omarchy-auto"\n'
 
     def test_builtin_themes_are_flattened(self, gazelle_app):
         gazelle_app.on_mount()
