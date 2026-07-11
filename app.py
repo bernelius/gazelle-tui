@@ -590,8 +590,8 @@ class Gazelle(App):
     PasswordScreen, HiddenNetworkScreen, Wired8021xScreen { align: center middle; }
     #dialog { width: 60; height: auto; border: solid $secondary; background: $background; padding: 1 2; }
     #title { text-style: bold; color: $secondary; margin-bottom: 1; }
-    .section { border: solid $foreground; border-title-style: bold; margin: 1 2; padding: 0 1; height: 1fr; layout: vertical; }
-    .section.active-section { border: solid $primary; }
+    .section { border: heavy $foreground; border-title-style: bold; margin: 1 1; padding: 0 1; height: 1fr; layout: vertical; }
+    .section.active-section { border: heavy $primary; }
     .section-title { text-style: bold; color: $secondary; background: $background; padding: 0 1; height: auto; }
     .section DataTable { height: 1fr; }
     #device-section, #station-section { height: 4; }
@@ -607,13 +607,13 @@ class Gazelle(App):
     }
 
     DataTable > .datatable--cursor {
-        background: $secondary 30%;
+        background: $foreground 30%;
         color: $foreground;
     }
 
     DataTable > .datatable--header {
         background: $background;
-        color: $secondary;
+        color: $foreground;
     }
 
     DataTable:focus {
@@ -1051,8 +1051,8 @@ class Gazelle(App):
 
         Falls back to the default focus traversal when a modal/dialog is open.
         """
-        known = self.query_one("#known")
-        new = self.query_one("#new")
+        known = self.query_one("#known", DataTable)
+        new = self.query_one("#new", DataTable)
         if not (known.has_focus or new.has_focus):
             super().action_focus_next()
             return
