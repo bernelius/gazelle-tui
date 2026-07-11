@@ -774,7 +774,7 @@ def build_css(styles: dict) -> str:
     PasswordScreen, HiddenNetworkScreen, Wired8021xScreen {{ align: center middle; }}
     #dialog {{ width: {styles["dialog_width"]}; height: auto; border: {styles["dialog_border"]} $accent; background: $background; padding: {styles["dialog_padding"]}; }}
     #title {{ text-style: {styles["title_text_style"]}; color: $accent; margin-bottom: 1; }}
-    .section {{ border: {styles["section_border"]} $accent; margin: {styles["section_margin"]}; padding: {styles["section_padding"]}; height: 1fr; layout: vertical; }}
+    .section {{ border: {styles["section_border"]} $foreground; border-title-style: bold; margin: {styles["section_margin"]}; padding: {styles["section_padding"]}; height: 1fr; layout: vertical; }}
     .section.active-section {{ border: {styles["section_border"]} $primary; }}
     .section-title {{ text-style: {styles["section_title_text_style"]}; color: $accent; background: $background; padding: {styles["section_title_padding"]}; height: auto; }}
     .section DataTable {{ height: 1fr; }}
