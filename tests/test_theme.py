@@ -6,7 +6,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from app import (
-    load_omarchy_colors,
     load_user_colors,
     resolve_theme,
     try_create_user_theme_template,
@@ -21,39 +20,27 @@ class TestResolveTheme:
         return available.__contains__
 
     def test_uses_saved_valid_theme(self):
-        theme, save = resolve_theme("textual-dark", False, False, self._exists({"textual-dark"}))
+        theme, save = resolve_theme("textual-dark", False, self._exists({"textual-dark"}))
         assert theme == "textual-dark"
         assert save is False
 
     def test_user_theme_wins_on_first_run(self):
-        theme, save = resolve_theme(None, True, True, self._exists({"user-theme", "omarchy-auto"}))
+        theme, save = resolve_theme(None, True, self._exists({"user-theme", "textual-dark"}))
         assert theme == "user-theme"
         assert save is True
 
-    def test_omarchy_used_when_no_user_theme(self):
-        theme, save = resolve_theme(None, False, True, self._exists({"omarchy-auto"}))
-        assert theme == "omarchy-auto"
-        assert save is True
-
     def test_textual_dark_is_default(self):
-        theme, save = resolve_theme(None, False, False, self._exists({"textual-dark"}))
+        theme, save = resolve_theme(None, False, self._exists({"textual-dark"}))
         assert theme == "textual-dark"
         assert save is True
 
     def test_recovers_when_saved_theme_is_invalid(self):
-        theme, save = resolve_theme("user-theme", False, False, self._exists({"textual-dark"}))
+        theme, save = resolve_theme("user-theme", False, self._exists({"textual-dark"}))
         assert theme == "textual-dark"
         assert save is True
 
-    def test_user_theme_wins_even_when_omarchy_present(self):
-        theme, save = resolve_theme(None, True, True, self._exists({"user-theme", "omarchy-auto"}))
-        assert theme == "user-theme"
-        assert save is True
-
     def test_saved_theme_checked_against_available_themes(self):
-        theme, save = resolve_theme(
-            "monokai", False, False, self._exists({"monokai", "textual-dark"})
-        )
+        theme, save = resolve_theme("monokai", False, self._exists({"monokai", "textual-dark"}))
         assert theme == "monokai"
         assert save is False
 
@@ -149,48 +136,6 @@ foreground = "#FFFFFF"
         assert load_user_colors(config_dir) is None
 
 
-class TestLoadOmarchyColors:
-    """Tests for loading colors from Omarchy's active theme."""
-
-    def test_returns_none_when_no_omarchy(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        assert load_omarchy_colors() is None
-
-    def test_loads_colors_from_alacritty_toml(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        theme_dir = tmp_path / ".config" / "omarchy" / "current" / "theme"
-        theme_dir.mkdir(parents=True)
-        theme_file = theme_dir / "alacritty.toml"
-        theme_file.write_text(
-            """
-[colors.primary]
-foreground = "#D8DEE9"
-background = "#2E3440"
-
-[colors.normal]
-yellow = "#EBCB8B"
-red = "#BF616A"
-green = "#A3BE8C"
-
-[colors.bright]
-yellow = "#EBCB8B"
-red = "#BF616A"
-green = "#A3BE8C"
-"""
-        )
-
-        result = load_omarchy_colors()
-
-        assert result is not None
-        assert result["foreground"] == "#D8DEE9"
-        assert result["background"] == "#2E3440"
-        assert result["secondary"] == "#EBCB8B"
-        assert result["primary"] == "#BF616A"
-        assert result["success"] == "#A3BE8C"
-        assert result["warning"] == "#EBCB8B"
-        assert result["error"] == "#BF616A"
-
-
 class TestTryCreateUserThemeTemplate:
     """Tests for the template creation helper."""
 
@@ -268,27 +213,6 @@ background = "#000000"
 
         assert gazelle_app.theme == "user-theme"
         assert gazelle_app.CONFIG_FILE.read_text() == 'theme = "user-theme"\n'
-
-    def test_omarchy_theme_detected_and_saved(self, tmp_path, monkeypatch, gazelle_app):
-        # Create an Omarchy theme file in the patched home directory
-        omarchy_dir = tmp_path / ".config" / "omarchy" / "current" / "theme"
-        omarchy_dir.mkdir(parents=True)
-        (omarchy_dir / "alacritty.toml").write_text(
-            """
-[colors.primary]
-foreground = "#D8DEE9"
-background = "#2E3440"
-
-[colors.normal]
-yellow = "#EBCB8B"
-red = "#BF616A"
-"""
-        )
-
-        gazelle_app.on_mount()
-
-        assert gazelle_app.theme == "omarchy-auto"
-        assert gazelle_app.CONFIG_FILE.read_text() == 'theme = "omarchy-auto"\n'
 
     def test_builtin_themes_are_flattened(self, gazelle_app):
         gazelle_app.on_mount()

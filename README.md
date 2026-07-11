@@ -35,26 +35,6 @@ Then just run:
 gazelle
 ```
 
-#### ⚠️ Note for Omarchy Linux Users
-
-If you get "target not found" errors for `python-textual`, `python-rich`, or `python-platformdirs`, your mirrors may be behind on Python packages. Use this **safe workaround**:
-
-```bash
-# Add official Arch mirrors (temporary)
-sudo sed -i '1iServer = https://geo.mirror.pkgbuild.com/$repo/os/$arch' /etc/pacman.d/mirrorlist
-sudo pacman -Syy
-
-# Now install gazelle
-yay -S gazelle-tui
-```
-
-**Why this is safe:**
-
-- Omarchy uses official Arch repositories, this just adds the source directly
-- Your Omarchy-specific packages are unaffected
-- Temporary fix until Omarchy mirrors sync (typically 1-7 days)
-- You can optionally remove the added line later with `sudo sed -i '/geo.mirror.pkgbuild.com/d' /etc/pacman.d/mirrorlist`
-
 ### On Nix
 
 #### **1. Using Home Manager (recommended)**
@@ -163,142 +143,12 @@ chmod +x gazelle
 ./gazelle
 ```
 
-## Omarchy Integration
-
-To integrate Gazelle as your WiFi TUI in Omarchy (replacing Impala):
-
-### Step 1: Install Gazelle
-
-```bash
-# Temporarily add Arch mirrors (Omarchy mirror sync issue)
-sudo sed -i '1iServer = https://geo.mirror.pkgbuild.com/$repo/os/$arch' /etc/pacman.d/mirrorlist
-sudo pacman -Syy
-
-# Install from AUR
-yay -S gazelle-tui
-```
-
-### Step 2: Choose Your Configuration Method
-
-**Important:** Omarchy changed how terminals are launched in November 2025 (version ~3.1.5+), and again in February 2026 (version 3.2.0+) with the switch to Ghostty. Choose the configuration that matches your Omarchy version:
-
-- **Omarchy versions before November 2025** → Use **Old Style** configuration
-- **Omarchy versions from November 2025 onwards** → Use **New Style** configuration
-
-#### Old Style (Pre-November 2025 Omarchy)
-
-For older Omarchy versions that launch terminals directly (like Alacritty/Kitty):
-
-**Configure Hyprland Window Rules:**
-
-Create a window rules configuration file:
-
-```bash
-cat > ~/.config/hypr/windows.conf << 'EOF'
-# Gazelle WiFi TUI - floating window
-# Old Hyprland Syntax
-windowrule = tag +floating-window, match:class Gazelle
-EOF
-```
-
-Add the source line to your Hyprland config:
-
-```bash
-echo "source = ~/.config/hypr/windows.conf" >> ~/.config/hypr/hyprland.conf
-```
-
-**Update Waybar Network Module:**
-
-Edit `~/.config/waybar/config.jsonc` and change the network module's `on-click`:
-
-```jsonc
-"network": {
-    ...
-    "on-click": "$TERMINAL --class=Gazelle -e gazelle"
-}
-```
-
-#### New Style (November 2025+ Omarchy)
-
-For newer Omarchy versions that use `xdg-terminal-exec` as a universal terminal launcher (including the default Ghostty terminal):
-
-**Configure Hyprland Window Rules:**
-
-Create a window rules configuration file:
-
-```bash
-cat > ~/.config/hypr/windows.conf << 'EOF'
-# Gazelle WiFi TUI - floating window
-# New Hyprland Syntax using match:initial_class (xdg-terminal-exec and Ghostty friendly)
-windowrule = float on, center on, size 800 600, match:initial_class org.omarchy.Gazelle
-EOF
-```
-
-Add the source line to your Hyprland config (if not already present):
-
-```bash
-echo "source = ~/.config/hypr/windows.conf" >> ~/.config/hypr/hyprland.conf
-```
-
-**Update Waybar Network Module:**
-
-Edit `~/.config/waybar/config.jsonc` and change the network module's `on-click`:
-
-```jsonc
-"network": {
-    ...
-    "on-click": "xdg-terminal-exec --app-id=org.omarchy.Gazelle -e gazelle"
-}
-```
-
-**Why the change?**
-
-- Omarchy uses `xdg-terminal-exec` as a universal terminal launcher.
-- `xdg-terminal-exec` passes `--app-id` down to the default terminal. 
-- **CRITICAL for Ghostty (Omarchy 3.2.0+ default):** Ghostty is a GTK application and strictly requires a valid D-Bus application ID format (it must contain at least one period, e.g., `org.omarchy.Gazelle`). Passing a simple string like `Gazelle` will be rejected by GTK, causing the window rule to fail!
-- Hyprland's `windowrule` with `match:initial_class` is required for proper window matching.
-
-### Step 3: Apply Changes
-
-```bash
-# Reload Hyprland configuration
-hyprctl reload
-
-# Restart Waybar
-killall waybar && waybar &
-```
-
-Now clicking the WiFi icon in Waybar will launch Gazelle as a centered, floating 800x600 window on top of all other windows - exactly like Impala worked.
-
-### What This Does
-
-**Old Style:** The `floating-window` tag automatically applies these rules (defined in Omarchy's system config):
-
-- `float` - Window floats instead of tiling
-- `center` - Centered on screen
-- `size 800 600` - Fixed size matching other Omarchy TUIs
-
-**New Style:** The `windowrule` rules explicitly define:
-
-- `float` - Window floats instead of tiling
-- `center` - Centered on screen
-- `size 800 600` - Fixed size matching other Omarchy TUIs
-
-### Reverting to nm-applet
-
-If you want to go back to nm-applet, change the waybar network `on-click` to:
-
-```json
-"on-click": "nm-applet --indicator"
-```
-
 ## Features
 
 - ✅ **WWAN/Cellular Support** - Manage 4G/5G modem connections with live signal monitoring
 - ✅ **Complete 802.1X Support** (PEAP/TTLS/TLS with all phase2 auth methods)
 - ✅ **VPN Connection Management** - Connect/disconnect OpenVPN and WireGuard VPNs
 - ✅ **Theme Persistence** - Your theme choice is saved and restored between sessions
-- ✅ **Automatic Omarchy theme integration**
 - ✅ **Hidden SSID Networks** - Connect to networks that don't broadcast
 - ✅ **WPA3-OWE Support** - Enhanced Open (encrypted open networks)
 - ✅ Connect to regular WiFi (WPA/WPA2/WPA3-PSK)
@@ -346,34 +196,17 @@ When connecting to an 802.1X network, simply select your authentication method f
 
 ## Themes
 
-### Automatic Theme Matching (Omarchy)
+### Theme Selection
 
-Gazelle automatically detects and matches your Omarchy theme colors!
-
-**How it works:**
-
-- Omarchy users: Gazelle reads `~/.config/omarchy/current/theme/alacritty.toml` (or `ghostty.conf`) and uses your exact theme colors
-- Theme changes: Just restart Gazelle after changing Omarchy themes
-- No configuration needed!
-
-**Supported:**
-
-- All Omarchy themes (nord, mars, gruvbox, catppuccin, tokyo-night, etc.)
-- Colors update automatically when you switch themes
-
-### Non-Omarchy Users
-
-If Omarchy is not detected, Gazelle uses standard ANSI terminal colors that work with any color scheme.
-
-### Manual Theme Override
-
-To use a specific theme regardless of Omarchy:
+To select a theme:
 
 1. Press `Ctrl+P` (command palette)
 2. Search for "theme"
 3. Select your preferred theme
 
-Note: Manual theme selection is saved and persists across restarts.
+Your selection is saved to `~/.config/gazelle/config.toml` and persists across restarts.
+
+By default, Gazelle uses the built-in `textual-dark` theme, which works with any color scheme.
 
 ## Theme Customization
 
@@ -417,7 +250,7 @@ warning    = "#EBCB8B"
 error      = "#BF616A"
 ```
 
-If the `[colors]` section is empty or commented out, Gazelle falls back to Omarchy auto-detection (if available) or the built-in `textual-dark` theme.
+If the `[colors]` section is empty or commented out, Gazelle falls back to the built-in `textual-dark` theme.
 
 Gazelle's own UI uses only the four base colors (`$primary`, `$secondary`, `$foreground`, and `$background`). All built-in themes are flattened so there are no extra tints except for the DataTable cursor overlay. Status colors (`$success`, `$warning`, `$error`) are preserved from the built-in theme or the user config for Textual widgets such as buttons and notifications.
 

@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 
 class TestDefaultFallback:
-    """Default theme selection when no user or Omarchy theme exists."""
+    """Default theme selection when no user theme exists."""
 
     def test_default_fallback_is_textual_dark_not_auto(self, tmp_path, monkeypatch):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -123,8 +123,7 @@ class TestResolveTheme:
         theme, save = resolve_theme(
             None,
             True,
-            True,
-            exists({"user-theme", "omarchy-auto", "textual-dark"}),
+            exists({"user-theme", "textual-dark"}),
         )
         assert theme == "user-theme"
         assert save is True
@@ -134,7 +133,6 @@ class TestResolveTheme:
 
         theme, save = resolve_theme(
             "textual-dark",
-            False,
             False,
             lambda name: name == "textual-dark",
         )

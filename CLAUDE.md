@@ -48,8 +48,7 @@ The application is three files plus tests:
 
 `config.toml["theme"]` is the source of truth once set. On first run, the app auto-detects a default in this order:
 1. **User custom theme** - `~/.config/gazelle/theme.toml` (only if all four base `[colors]` keys are defined)
-2. **Omarchy auto-detection** - reads `~/.config/omarchy/current/theme/alacritty.toml`
-3. **Built-in Textual themes** - `textual-dark` is the default
+2. **Built-in Textual themes** - `textual-dark` is the default
 
 The user `theme.toml` uses semantic color names under `[colors]`:
 
@@ -66,11 +65,11 @@ error      = "#BF616A"
 
 The four base colors (`secondary`, `primary`, `foreground`, `background`) must all be defined for the custom theme to activate. `success`, `warning`, and `error` are optional and default to the values shown above.
 
-An empty or fully commented `[colors]` section means the custom theme does not activate, so Omarchy or the built-in default is used.
+An empty or fully commented `[colors]` section means the custom theme does not activate, so the built-in default is used.
 
 Textual's built-in themes are available and can be selected manually via the command palette (`Ctrl+P`) or by setting `"theme"` in `config.toml`. Gazelle's own UI only uses the four base colors (`$primary`, `$secondary`, `$foreground`, and `$background`), so every built-in theme is flattened on startup: `$surface`, `$panel`, and `$boost` are collapsed to `$background` and `$accent` is forced to equal `$secondary`. Status colors (`$success`, `$warning`, `$error`) are preserved from the built-in theme or the user config for Textual widgets such as buttons and notifications.
 
-Theme choice persists in `~/.config/gazelle/config.toml`. Helper functions `resolve_theme()`, `load_omarchy_colors()`, `load_user_colors()`, and `normalize_color_format()` handle theme resolution, color loading, and format conversion (0xRRGGBB to #RRGGBB).
+Theme choice persists in `~/.config/gazelle/config.toml`. Helper functions `resolve_theme()`, `load_user_colors()`, and `normalize_color_format()` handle theme resolution, color loading, and format conversion (0xRRGGBB to #RRGGBB).
 
 ### Configuration
 

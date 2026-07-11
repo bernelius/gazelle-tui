@@ -427,48 +427,6 @@ class PasswordScreen(ModalScreen):
         self.app.pop_screen()
 
 
-def load_omarchy_colors():
-    """
-    Load colors from Omarchy's active theme.
-    Returns dict with RGB color values, or None if not found.
-    """
-    if tomllib is None:
-        return None
-
-    theme_file = Path.home() / ".config/omarchy/current/theme/alacritty.toml"
-
-    if not theme_file.exists():
-        return None
-
-    try:
-        with open(theme_file, "rb") as f:
-            data = tomllib.load(f)
-
-        colors = data.get("colors", {})
-        normal = colors.get("normal", {})
-        bright = colors.get("bright", {})
-        primary = colors.get("primary", {})
-
-        return {
-            "secondary": normalize_color_format(
-                normal.get("yellow") or bright.get("yellow") or "#EBCB8B"
-            ),
-            "primary": normalize_color_format(normal.get("red") or bright.get("red") or "#BF616A"),
-            "foreground": normalize_color_format(primary.get("foreground") or "#D8DEE9"),
-            "background": normalize_color_format(primary.get("background") or "#2E3440"),
-            "success": normalize_color_format(
-                normal.get("green") or bright.get("green") or "#A3BE8C"
-            ),
-            "warning": normalize_color_format(
-                normal.get("yellow") or bright.get("yellow") or "#EBCB8B"
-            ),
-            "error": normalize_color_format(normal.get("red") or bright.get("red") or "#BF616A"),
-        }
-    except Exception:
-        # If parsing fails, return None to use fallback
-        return None
-
-
 # Base semantic colors required for a custom theme to activate.
 _DEFAULT_THEME_COLORS = {
     "secondary": "#EBCB8B",
@@ -531,7 +489,7 @@ def load_user_colors(config_dir: Path):
         return None
 
 
-def resolve_theme(saved_theme, has_user_theme, has_omarchy_theme, theme_exists):
+def resolve_theme(saved_theme, has_user_theme, theme_exists):
     """Determine the effective theme and whether it should be persisted.
 
     config.toml is the source of truth: if it names a valid theme, that theme
@@ -541,7 +499,6 @@ def resolve_theme(saved_theme, has_user_theme, has_omarchy_theme, theme_exists):
     Args:
         saved_theme: Theme name from config.toml, or None.
         has_user_theme: True if a user theme.toml was loaded successfully.
-        has_omarchy_theme: True if an Omarchy theme was detected.
         theme_exists: Callable that returns True for available theme names.
 
     Returns:
@@ -552,8 +509,6 @@ def resolve_theme(saved_theme, has_user_theme, has_omarchy_theme, theme_exists):
 
     if has_user_theme:
         return "user-theme", True
-    if has_omarchy_theme:
-        return "omarchy-auto", True
     return "textual-dark", True
 
 
@@ -566,7 +521,7 @@ def _flatten_builtin_themes(app: App) -> None:
     """
     from textual.design import DEFAULT_DARK_BACKGROUND, DEFAULT_LIGHT_BACKGROUND
 
-    custom_names = {"user-theme", "omarchy-auto"}
+    custom_names = {"user-theme"}
     for name in list(app.available_themes):
         if name in custom_names:
             continue
@@ -751,7 +706,6 @@ class Gazelle(App):
     def on_mount(self) -> None:
         # Load color sources
         user_colors = load_user_colors(self.CONFIG_DIR)
-        omarchy_colors = load_omarchy_colors()
 
         # Register custom themes when their source colors are available
         if user_colors:
@@ -773,25 +727,6 @@ class Gazelle(App):
                 )
             )
 
-        if omarchy_colors:
-            self.register_theme(
-                Theme(
-                    name="omarchy-auto",
-                    primary=omarchy_colors["primary"],
-                    secondary=omarchy_colors["secondary"],
-                    accent=omarchy_colors["secondary"],
-                    foreground=omarchy_colors["foreground"],
-                    background=omarchy_colors["background"],
-                    surface=omarchy_colors["background"],
-                    panel=omarchy_colors["background"],
-                    boost="transparent",
-                    success=omarchy_colors["success"],
-                    warning=omarchy_colors["warning"],
-                    error=omarchy_colors["error"],
-                    dark=True,
-                )
-            )
-
         # Flatten all builtin themes so they only use the four Gazelle colors.
         _flatten_builtin_themes(self)
 
@@ -802,7 +737,6 @@ class Gazelle(App):
         effective_theme, should_save = resolve_theme(
             saved_theme,
             user_colors is not None,
-            omarchy_colors is not None,
             lambda name: self.get_theme(name) is not None,
         )
 
