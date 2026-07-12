@@ -749,16 +749,19 @@ class Gazelle(App):
         except Exception:
             self.theme = "textual-dark"
 
-        self.query_one("#dev", DataTable).add_columns("Name", "Mode", "Powered", "MAC Address")
-        self.query_one("#dev", DataTable).cursor_type = "none"
-        self.query_one("#dev", DataTable).can_focus = False
-        self.query_one("#sta", DataTable).add_columns(
-            "State", "Frequency", "Security", "IPv4 Address"
-        )
-        self.query_one("#sta", DataTable).cursor_type = "none"
-        self.query_one("#sta", DataTable).can_focus = False
-        self.query_one("#known", DataTable).add_columns("Name", "Security", "Signal")
-        self.query_one("#new", DataTable).add_columns("Name", "Security", "Signal")
+        dev_table = self.query_one("#dev", DataTable)
+        sta_table = self.query_one("#sta", DataTable)
+        known_table = self.query_one("#known", DataTable)
+        new_table = self.query_one("#new", DataTable)
+
+        dev_table.add_columns("Name", "Mode", "Powered", "MAC Address")
+        dev_table.cursor_type = "none"
+        dev_table.can_focus = False
+        sta_table.add_columns("State", "Frequency", "Security", "IPv4 Address")
+        sta_table.cursor_type = "none"
+        sta_table.can_focus = False
+        known_table.add_columns("Name", "Security", "Signal")
+        new_table.add_columns("Name", "Security", "Signal")
 
         # Show cached network list immediately
         initial_networks = get_wifi_list(force_rescan=False)
@@ -766,16 +769,15 @@ class Gazelle(App):
             self.refresh_all(networks=initial_networks)
         else:
             # Show placeholder while background rescan runs
-            new_table = self.query_one("#new", DataTable)
             new_table.add_row("Scanning for networks...", "", "")
 
         # Trigger async rescan in background; refresh on every changed poll.
         self.run_worker(partial(self.scan_networks_async, initial_networks), exclusive=True)
 
-        self.query_one("#new").focus()
+        new_table.focus()
         self.active_section = "new"
-        self.query_one("#known", DataTable).cursor_type = "none"
-        self.query_one("#new", DataTable).cursor_type = "row"
+        known_table.cursor_type = "none"
+        new_table.cursor_type = "row"
         self.update_info_sections_visibility()
 
     def on_unmount(self) -> None:
@@ -1037,34 +1039,34 @@ class Gazelle(App):
         """Keep active_section in sync with keyboard or mouse focus changes."""
         if event.control.id in ("known", "new"):
             self.active_section = event.control.id
-            known = self.query_one("#known", DataTable)
-            new = self.query_one("#new", DataTable)
+            known_table = self.query_one("#known", DataTable)
+            new_table = self.query_one("#new", DataTable)
             if event.control.id == "known":
-                known.cursor_type = "row"
-                new.cursor_type = "none"
+                known_table.cursor_type = "row"
+                new_table.cursor_type = "none"
             else:
-                new.cursor_type = "row"
-                known.cursor_type = "none"
+                new_table.cursor_type = "row"
+                known_table.cursor_type = "none"
 
     def action_switch_section(self) -> None:
         """Toggle focus between Known and New network sections.
 
         Falls back to the default focus traversal when a modal/dialog is open.
         """
-        known = self.query_one("#known", DataTable)
-        new = self.query_one("#new", DataTable)
-        if not (known.has_focus or new.has_focus):
+        known_table = self.query_one("#known", DataTable)
+        new_table = self.query_one("#new", DataTable)
+        if not (known_table.has_focus or new_table.has_focus):
             super().action_focus_next()
             return
-        if known.has_focus:
-            known.cursor_type = "none"
-            new.focus()
-            new.cursor_type = "row"
+        if known_table.has_focus:
+            known_table.cursor_type = "none"
+            new_table.focus()
+            new_table.cursor_type = "row"
             self.active_section = "new"
         else:
-            new.cursor_type = "none"
-            known.focus()
-            known.cursor_type = "row"
+            new_table.cursor_type = "none"
+            known_table.focus()
+            known_table.cursor_type = "row"
             self.active_section = "known"
 
     def action_scan(self) -> None:
@@ -1073,7 +1075,8 @@ class Gazelle(App):
 
     def action_select(self) -> None:
         t = self._get_focused_table()
-        is_known = self.query_one("#known").has_focus
+        known_table = self.query_one("#known", DataTable)
+        is_known = known_table.has_focus
 
         if t.cursor_row >= 0 and t.cursor_row < t.row_count:
             row = t.get_row_at(t.cursor_row)
