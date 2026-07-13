@@ -3,7 +3,13 @@
 import subprocess
 from unittest.mock import MagicMock, call, patch
 
-from network import get_device_ipv4, get_ethernet_interface, get_wifi_list, has_wwan_capabilities
+from network import (
+    get_device_ipv4,
+    get_ethernet_interface,
+    get_wifi_list,
+    get_wifi_mode,
+    has_wwan_capabilities,
+)
 
 
 class TestGetWifiList:
@@ -306,3 +312,72 @@ class TestHasWwanCapabilities:
             result = has_wwan_capabilities()
 
         assert result is False
+
+
+class TestGetWifiMode:
+    """Unit tests for get_wifi_mode."""
+
+    def test_maps_infrastructure_to_infra(self):
+        active_output = "HomeNet:802-11-wireless:wlan0\n"
+        mode_output = "infrastructure\n"
+
+        def side_effect(cmd, **kwargs):
+            if "connection" in cmd and "--active" in cmd:
+                return MagicMock(stdout=active_output, returncode=0)
+            return MagicMock(stdout=mode_output, returncode=0)
+
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.side_effect = side_effect
+            result = get_wifi_mode("wlan0")
+
+        assert result == "infra"
+
+    def test_returns_ap_mode(self):
+        active_output = "Hotspot:802-11-wireless:wlan0\n"
+        mode_output = "ap\n"
+
+        def side_effect(cmd, **kwargs):
+            if "connection" in cmd and "--active" in cmd:
+                return MagicMock(stdout=active_output, returncode=0)
+            return MagicMock(stdout=mode_output, returncode=0)
+
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.side_effect = side_effect
+            result = get_wifi_mode("wlan0")
+
+        assert result == "ap"
+
+    def test_returns_infra_when_no_active_wifi_connection(self):
+        active_output = "vpn0:vpn:wlan0\n"
+
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout=active_output, returncode=0)
+            result = get_wifi_mode("wlan0")
+
+        assert result == "infra"
+
+    def test_returns_infra_when_iface_is_none(self):
+        result = get_wifi_mode(None)
+        assert result == "infra"
+
+    def test_returns_infra_when_nmcli_fails(self):
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.CalledProcessError(1, "nmcli")
+            result = get_wifi_mode("wlan0")
+
+        assert result == "infra"
+
+    def test_handles_connection_names_with_colons(self):
+        active_output = "Work:Guest:802-11-wireless:wlan0\n"
+        mode_output = "infrastructure\n"
+
+        def side_effect(cmd, **kwargs):
+            if "connection" in cmd and "--active" in cmd:
+                return MagicMock(stdout=active_output, returncode=0)
+            return MagicMock(stdout=mode_output, returncode=0)
+
+        with patch("network.subprocess.run") as mock_run:
+            mock_run.side_effect = side_effect
+            result = get_wifi_mode("wlan0")
+
+        assert result == "infra"

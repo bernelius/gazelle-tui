@@ -31,6 +31,55 @@ def get_wifi_interface() -> str | None:
     return None
 
 
+def get_wifi_mode(iface) -> str:
+    """Return the current WiFi operating mode for the interface.
+
+    Queries NetworkManager for the active connection's 802-11-wireless.mode.
+    ``infrastructure`` is shortened to ``infra`` to keep the device table
+    compact. Falls back to ``infra`` if no connection is active or the mode
+    cannot be determined.
+    """
+    if not iface:
+        return "infra"
+    try:
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        active_name = None
+        for line in result.stdout.splitlines():
+            if not line:
+                continue
+            parts = line.rsplit(":", 2)
+            if len(parts) == 3 and parts[1] == "802-11-wireless" and parts[2] == iface:
+                active_name = parts[0]
+                break
+
+        if not active_name:
+            return "infra"
+
+        result = subprocess.run(
+            [
+                "nmcli",
+                "-t",
+                "-g",
+                "802-11-wireless.mode",
+                "connection",
+                "show",
+                active_name,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        mode = result.stdout.strip()
+        return {"infrastructure": "infra"}.get(mode, mode or "infra")
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return "infra"
+
+
 def _parse_wifi_list(stdout: str) -> list:
     """Parse the tabular output of ``nmcli device wifi list``.
 

@@ -590,7 +590,7 @@ class Gazelle(App):
     PasswordScreen, HiddenNetworkScreen, Wired8021xScreen { align: center middle; }
     #dialog { width: 60; height: auto; border: solid $secondary; background: $background; padding: 1 2; }
     #title { text-style: bold; color: $secondary; margin-bottom: 1; }
-    .section { border: heavy $foreground; border-title-style: bold; margin: 1 1; padding: 0 1; height: 1fr; layout: vertical; }
+    .section { border: heavy $foreground; border-title-style: bold; margin: 0 1; padding: 0 1; height: 1fr; layout: vertical; }
     .section.active-section { border: heavy $primary; }
     .section-title { text-style: bold; color: $secondary; background: $background; padding: 0 1; height: auto; }
     .section DataTable { height: 1fr; }
@@ -696,8 +696,7 @@ class Gazelle(App):
         new_container.border_title = "New Networks"
         station_container.border_title = "Station"
         yield ScrollableContainer(
-            device_container,
-            station_container,
+            Horizontal(device_container, station_container),
             known_container,
             new_container,
         )
@@ -945,11 +944,11 @@ class Gazelle(App):
             ).stdout.strip()
         except:
             mac = "-"
-        device_table.add_row(iface, "station", "On" if wifi_enabled() else "Off", mac)
+        device_table.add_row(iface, get_wifi_mode(iface), "on" if wifi_enabled() else "off", mac)
 
         # Add WWAN status if the system has WWAN capability
         if has_wwan_capabilities():
-            device_table.add_row("wwan", "wwan", "On" if wwan_enabled() else "Off", "-")
+            device_table.add_row("wwan", "wwan", "on" if wwan_enabled() else "off", "-")
 
         # Station
         station_table = self.query_one("#sta", DataTable)
