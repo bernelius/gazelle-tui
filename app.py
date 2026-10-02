@@ -759,7 +759,7 @@ class Gazelle(App):
         sta_table.add_columns("State", "Frequency", "Security", "IPv4 Address")
         sta_table.cursor_type = "none"
         sta_table.can_focus = False
-        known_table.add_columns("Name", "Security", "Signal")
+        known_table.add_columns("", "Name", "Security", "Signal")
         new_table.add_columns("Name", "Security", "Signal")
 
         # Show cached network list immediately
@@ -983,7 +983,8 @@ class Gazelle(App):
                         else:
                             sec = "-"
                         sig = f"{avail[name]['signal']}%"
-                        known_table.add_row(name, sec, sig)
+                        status = "●" if avail[name].get("connected") else ""
+                        known_table.add_row(status, name, sec, sig)
         except:
             pass
 
@@ -1079,7 +1080,10 @@ class Gazelle(App):
 
         if t.cursor_row >= 0 and t.cursor_row < t.row_count:
             row = t.get_row_at(t.cursor_row)
-            ssid, sec = str(row[0]), str(row[1])
+            if is_known:
+                ssid, sec = str(row[1]), str(row[2])
+            else:
+                ssid, sec = str(row[0]), str(row[1])
 
             if is_known:
                 self.notify("Connecting...")
@@ -1149,7 +1153,7 @@ class Gazelle(App):
         if known.cursor_row < 0 or known.cursor_row >= known.row_count:
             return
         row = known.get_row_at(known.cursor_row)
-        ssid = str(row[0]).strip()
+        ssid = str(row[1]).strip()
         if not ssid:
             return
         success = forget_network(ssid)
